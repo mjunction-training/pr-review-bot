@@ -9,6 +9,7 @@ app.logger.setLevel(logging.INFO)
 
 WEBHOOK_SECRET = os.getenv('GITHUB_WEBHOOK_SECRET')
 MCP_SERVER_URL = os.getenv('MCP_SERVER_URL')
+TRIGGER_TEAM_SLUG = os.getenv('TRIGGER_TEAM_SLUG', 'ai-review-bots')  # Set your team slug here or via env
 
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
@@ -21,20 +22,25 @@ def handle_webhook():
     event = request.headers.get('X-GitHub-Event')
     payload = request.json
 
-    # Process only PR events
-    if event == "pull_request" and payload['action'] in ['opened', 'reopened', 'synchronize']:
-        pr_details = {
-            "repo": payload['repository']['full_name'],
-            "pr_id": payload['pull_request']['number'],
-            "diff_url": payload['pull_request']['diff_url'],
-            "commit_sha": payload['pull_request']['head']['sha'],
-            "installation_id": payload['installation']['id']
-        }
-        app.logger.info(f"Processing PR #{pr_details['pr_id']} in {pr_details['repo']}")
+    # Only handle when team reviewers are added to a PR
+    if event == "pull_request" and payload.get('action') == "requested_reviewers":
+        requested_teams = payload.get("requested_teams", [])
+        matching_teams = [team for team in requested_teams if team.get("slug") == TRIGGER_TEAM_SLUG]
 
-        # Queue processing
-        send_to_mcp(pr_details, MCP_SERVER_URL)
-        return jsonify({"status": "processing started"}), 202
+        if matching_teams:
+            pr_details = {
+                "repo": payload['repository']['full_name'],
+                "pr_id": payload['pull_request']['number'],
+                "diff_url": payload['pull_request']['diff_url'],
+                "commit_sha": payload['pull_request']['head']['sha'],
+                "installation_id": payload['installation']['id']
+            }
+            app.logger.info(f"Triggered review by team '{TRIGGER_TEAM_SLUG}' for PR #{pr_details['pr_id']} in {pr_details['repo']}")
+            send_to_mcp(pr_details, MCP_SERVER_URL)
+            return jsonify({"status": "team-triggered review started"}), 202
+        else:
+            app.logger.info(f"No matching team '{TRIGGER_TEAM_SLUG}' in requested reviewers")
+            return jsonify({"status": "team not matched"}), 200
 
     return jsonify({"status": "ignored"}), 200
 
