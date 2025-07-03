@@ -53,7 +53,7 @@ class GitHubAppAuth:
         url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
         
         try:
-            response = requests.post(url, headers=headers, timeout=5)
+            response = requests.post(url, headers=headers, timeout=120)
             response.raise_for_status()
             token_data = response.json()
             token = token_data['token']
@@ -111,7 +111,7 @@ def send_to_mcp(pr_details, mcp_url):
         response = requests.post(
             f"{mcp_url}/review",
             json=payload,
-            timeout=30
+            timeout=120
         )
         response.raise_for_status()
         logger.info(f"Sent PR #{pr_details['pr_id']} to MCP successfully")
