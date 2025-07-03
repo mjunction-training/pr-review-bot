@@ -2,7 +2,8 @@ import os
 import requests
 import logging
 from flask import Flask, request, jsonify
-from github_utils import validate_webhook, get_pr_diff
+# Import the new method from github_utils
+from github_utils import validate_webhook, get_pr_diff, add_pr_review_comments
 from mcp_client import send_to_mcp
 
 app = Flask(__name__)
@@ -37,6 +38,7 @@ def handle_webhook():
         
         pr_number = pull_request.get('number')
         repo_full_name = payload['repository']['full_name'] # Repository is at top level
+        installation_id = payload.get('installation', {}).get('id') # Get installation ID
 
         app.logger.info(f"Received review_requested event for PR #{pr_number} in {repo_full_name}")
         app.logger.info(f"Requested teams: {[team.get('slug') for team in requested_teams]}")
@@ -51,15 +53,21 @@ def handle_webhook():
                 "pr_id": pr_number,
                 "diff_url": pull_request.get('diff_url'),
                 "commit_sha": pull_request.get('head', {}).get('sha'),
-                "installation_id": payload.get('installation', {}).get('id')
+                "installation_id": installation_id # Pass installation_id
             }
             app.logger.info(f"Triggered review by team '{TRIGGER_TEAM_SLUG}' for PR #{pr_details['pr_id']} in {pr_details['repo']}")
             
-            # Send to MCP server asynchronously if possible, or handle potential long running task
-            # For simplicity, calling directly. In production, consider a task queue.
-            send_to_mcp(pr_details, MCP_SERVER_URL)
+            # Call MCP server and get the review payload back
+            review_payload = send_to_mcp(pr_details, MCP_SERVER_URL)
             
-            return jsonify({"status": "team-triggered review started"}), 202
+            if review_payload:
+                app.logger.info(f"Successfully received review payload from MCP for PR #{pr_number}. Posting comments to GitHub.")
+                # Call the new method to add review comments to GitHub
+                add_pr_review_comments(repo_full_name, pr_number, installation_id, review_payload)
+                return jsonify({"status": "team-triggered review completed", "review_posted": True}), 200
+            else:
+                app.logger.error(f"Failed to get review payload from MCP for PR #{pr_number}.")
+                return jsonify({"status": "team-triggered review failed", "reason": "MCP did not return review"}), 500
         else:
             app.logger.info(f"No matching team '{TRIGGER_TEAM_SLUG}' in requested reviewers for PR #{pr_number}")
             return jsonify({"status": "team not matched"}), 200
@@ -118,3 +126,4 @@ if __name__ == '__main__':
 
     port = int(os.getenv('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
+
