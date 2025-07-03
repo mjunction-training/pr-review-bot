@@ -5,34 +5,40 @@ import hashlib
 
 logger = logging.getLogger(__name__)
 
+
 def validate_webhook(payload, signature, secret):
     """
-    Validate GitHub webhook signature using HMAC-SHA256
-    
+    Validate GitHub webhook signature using HMAC-SHA256.
+
     Args:
-        payload: Raw request payload (bytes)
-        signature: Header signature (string)
-        secret: Webhook secret (string)
-    
+        payload (bytes): Raw request payload.
+        signature (str): The value of the 'X-Hub-Signature-256' header (e.g., 'sha256=HEX_DIGEST').
+        secret (str): The webhook secret configured in your GitHub App.
+
     Returns:
-        bool: True if signature is valid
+        bool: True if signature is valid, False otherwise.
     """
     if not signature or not secret:
-        logger.error("Missing signature or secret")
+        print("Error: Missing signature header or webhook secret.")
         return False
-    
-    # Create HMAC digest
-    digest = hmac.new(
-        key=secret.encode('utf-8'),
-        msg=payload,
-        digestmod=hashlib.sha256
-    ).hexdigest()
-    
-    # Format with algorithm prefix
-    expected_signature = f"sha256={digest}"
-    
-    # Compare signatures
-    return hmac.compare_digest(expected_signature, signature)
+
+    # GitHub signature format is 'sha256=HEX_DIGEST'
+    try:
+        sha_name, hex_digest = signature.split('=')
+    except ValueError:
+        print("Error: X-Hub-Signature-256 header is not in the expected 'sha256=HEX_DIGEST' format.")
+        return False
+
+    if sha_name != 'sha256':
+        print(f"Error: Signature algorithm is '{sha_name}', expected 'sha256'.")
+        return False
+
+    # Calculate the HMAC digest of the payload
+    mac = hmac.new(secret.encode('utf-8'), msg=payload, digestmod=hashlib.sha256)
+    calculated_digest = mac.hexdigest()
+
+    # Use hmac.compare_digest for constant-time comparison to prevent timing attacks
+    return hmac.compare_digest(calculated_digest, hex_digest)
 
 def get_pr_diff(diff_url, access_token):
     """
