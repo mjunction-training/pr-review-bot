@@ -84,19 +84,28 @@ def get_installation_token(installation_id):
     return _auth_handler.get_installation_token(installation_id)
 
 def send_to_mcp(pr_details, mcp_url):
-    """Send PR data to MCP server for review"""
+    """
+    Send PR data to MCP server for review and return the review payload.
+
+    Args:
+        pr_details (dict): Dictionary containing PR details (repo, pr_id, diff_url, commit_sha, installation_id).
+        mcp_url (str): The URL of the MCP server.
+
+    Returns:
+        dict or None: The review payload from the MCP server if successful, None otherwise.
+    """
     try:
         installation_id = pr_details['installation_id']
-        access_token = get_installation_token(installation_id)
+        access_token = get_installation_token(installation_id) # This should be the App's installation token
         
         if not access_token:
-            logger.error("No access token available")
-            return False
+            logger.error("No access token available for fetching diff.")
+            return None
         
-        # Get PR diff
+        # Get PR diff using the installation token
         diff_content = get_pr_diff(pr_details['diff_url'], access_token)
         
-        # Prepare payload
+        # Prepare payload for MCP server
         payload = {
             "repo": pr_details['repo'],
             "pr_id": pr_details['pr_id'],
@@ -113,11 +122,13 @@ def send_to_mcp(pr_details, mcp_url):
             json=payload,
             timeout=120
         )
-        response.raise_for_status()
-        logger.info(f"Sent PR #{pr_details['pr_id']} to MCP successfully")
-        return True
+        response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
+        
+        review_payload = response.json()
+        logger.info(f"Sent PR #{pr_details['pr_id']} to MCP successfully. Received review payload.")
+        return review_payload # Return the review payload
     except requests.exceptions.RequestException as e:
-        logger.error(f"HTTP error sending to MCP: {str(e)}")
+        logger.error(f"HTTP error sending to MCP or receiving response: {str(e)}")
     except Exception as e:
-        logger.error(f"Failed to send to MCP: {str(e)}")
-    return False
+        logger.error(f"Failed to send to MCP or process response: {str(e)}")
+    return None # Return None on failure
