@@ -26,8 +26,8 @@ def handle_webhook():
     # Only handle when team reviewers are added to a PR
     if event == "pull_request" and payload.get('action') == "requested_reviewers":
         requested_teams = payload.get("requested_teams", [])
-        app.logger.info(f"Received requested_reviewers event for PR #{payload['pull_request']['number']} in {payload['repository']['full_name']}")
-        app.logger.info(f"Requested reviewers: {requested_teams}")
+        app.logger.error(f"Received requested_reviewers event for PR #{payload['pull_request']['number']} in {payload['repository']['full_name']}")
+        app.logger.error(f"Requested reviewers: {requested_teams}")
         matching_teams = [team for team in requested_teams if team.get("slug") == TRIGGER_TEAM_SLUG]
 
         if matching_teams:
