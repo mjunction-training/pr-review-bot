@@ -58,7 +58,7 @@ def get_pr_diff(diff_url, access_token):
     }
     
     try:
-        response = requests.get(diff_url, headers=headers, timeout=10)
+        response = requests.get(diff_url, headers=headers, timeout=120)
         response.raise_for_status()
         return response.text
     except requests.exceptions.RequestException as e:
