@@ -1,4 +1,5 @@
 import os
+import requests
 import logging
 from flask import Flask, request, jsonify
 from github_utils import validate_webhook, get_pr_diff
@@ -45,6 +46,29 @@ def handle_webhook():
             return jsonify({"status": "team not matched"}), 200
 
     return jsonify({"status": "ignored"}), 200
+
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    # Test connectivity to GitHub API
+    try:
+        response = requests.get("https://api.github.com", timeout=3)
+        if response.status_code == 200:
+            return jsonify({
+                "status": "ok",
+                "github_api": "reachable",
+                "mcp_connection": "untested"
+            }), 200
+    except:
+        pass
+    
+    return jsonify({
+        "status": "warning",
+        "github_api": "unreachable",
+        "mcp_connection": "untested"
+    }), 200
+
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
