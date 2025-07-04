@@ -54,8 +54,8 @@ class GitHubUtils:
             logger.error(f"Failed to get installation token for installation {installation_id}: {e}")
             raise RuntimeError(f"Could not retrieve installation token: {e}")
         
-    def validate_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
-        if not signature or not secret:
+    def validate_webhook_signature(self, payload: bytes, signature: str) -> bool:
+        if not signature or not self.webhook_secret:
             logger.warning("Error: Missing signature header or webhook secret.")
             return False
         
@@ -69,13 +69,13 @@ class GitHubUtils:
             logger.warning(f"Error: Signature algorithm is '{sha_name}', expected 'sha256'.")
             return False
 
-        mac = hmac.new(secret.encode('utf-8'), msg=payload, digestmod=hashlib.sha256)
+        mac = hmac.new(self.webhook_secret.encode('utf-8'), msg=payload, digestmod=hashlib.sha256)
         calculated_digest = mac.hexdigest()
 
         return hmac.compare_digest(calculated_digest, hex_digest)
 
     def parse_github_webhook(self, request_data: bytes, signature: str, event_header: str) -> tuple[str, dict]:
-        if not self.validate_webhook_signature(request_data, signature, self.webhook_secret):
+        if not self.validate_webhook_signature(request_data, signature):
             raise ValueError("Invalid webhook signature")
 
         payload = json.loads(request_data)
