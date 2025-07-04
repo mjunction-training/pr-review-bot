@@ -9,3 +9,4 @@ fastmcp>=2.10.1
 pydantic>=2.11.7
 langchain-core==0.1.16
 langchain_community
+flask[async]
