@@ -5,7 +5,6 @@ from github_utils import GitHubUtils
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from fastmcp.client import Client
-from fastmcp.server import ModelClient 
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
