@@ -24,15 +24,9 @@ class GitHubUtils:
             logger.error("GITHUB_APP_ID environment variable not set.")
             raise ValueError("GitHub App ID must be provided.")
         
-        if not self.private_key or "BEGIN RSA PRIVATE KEY" not in self.private_key:
+        if not self.private_key:
             logger.error("GITHUB_PRIVATE_KEY environment variable not set.")
             raise ValueError("GitHub Private Key must be provided.")
-
-        try:
-            self.private_key = base64.b64decode(self.private_key).decode('utf-8')
-        except Exception as e:
-            logger.error(f"Failed to decode private key: {e}")
-            raise
 
         try:
             self._app_auth_handler = Auth.AppAuth(
