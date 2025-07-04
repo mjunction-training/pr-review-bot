@@ -1,134 +1,154 @@
 import os
-import json
 import requests
 import logging
-import jwt
-import time
-from github_utils import get_pr_diff
+from github_utils import GitHubUtils
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from fastmcp.client import Client
+from fastmcp.server import ModelClient 
+from pydantic import BaseModel
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-class GitHubAppAuth:
-    """Handles GitHub App authentication and token generation"""
-    _tokens = {}  # Cache: {installation_id: (token, expiry)}
+class ReviewInputClient(BaseModel):
+    diff: str
+    repo: str
+    pr_id: int
+    metadata: Dict[str, Any]
+    review_prompt_content: str
+    summary_prompt_content: str
 
-    def __init__(self):
-        self.app_id = os.getenv('GITHUB_APP_ID')
-        self.private_key = os.getenv('GITHUB_PRIVATE_KEY')
-        if not self.private_key or not self.app_id:
-            logger.error("Missing GitHub App credentials")
-            raise ValueError("GITHUB_APP_ID and GITHUB_PRIVATE_KEY must be set")
+class CommentClient(BaseModel):
+    file: str
+    line: int
+    comment: str
 
-        # Decode base64 if needed
-        if "-----BEGIN RSA PRIVATE KEY-----" not in self.private_key:
-            try:
-                import base64
-                self.private_key = base64.b64decode(self.private_key).decode('utf-8')
-            except:
-                logger.error("Failed to decode private key")
+class SecurityIssueClient(BaseModel):
+    file: str
+    line: int
+    issue: str
 
-    def create_jwt(self):
-        """Generate JWT for GitHub App authentication"""
-        payload = {
-            'iat': int(time.time()),
-            'exp': int(time.time()) + 600,  # 10 minutes max
-            'iss': self.app_id
-        }
-        return jwt.encode(payload, self.private_key, algorithm='RS256')
+class ReviewOutputClient(BaseModel):
+    summary: str
+    comments: List[CommentClient]
+    security_issues: List[SecurityIssueClient]
 
-    def get_installation_token(self, installation_id):
-        """Get installation access token with caching"""
-        # Check cache
-        if installation_id in self._tokens:
-            token, expiry = self._tokens[installation_id]
-            if time.time() < expiry - 60:  # 1 minute buffer
-                return token
+class MCPClient:
+    def __init__(self, github_utils: GitHubUtils):
+        self.github_utils = github_utils
+        self.mcp_url = os.getenv('MCP_SERVER_URL')
+        if not self.mcp_url:
+            logger.error("MCP_SERVER_URL environment variable not set.")
+            raise ValueError("MCP_SERVER_URL must be provided or set as an environment variable.")
+        self.model_client = Client(self.mcp_url)
 
-        # Request new token
-        jwt_token = self.create_jwt()
-        headers = {
-            "Authorization": f"Bearer {jwt_token}",
-            "Accept": "application/vnd.github.v3+json"
-        }
-        url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
-        
+    def load_guidelines() -> str:
         try:
-            response = requests.post(url, headers=headers, timeout=120)
-            response.raise_for_status()
-            token_data = response.json()
-            token = token_data['token']
-            # Expiry has buffer (GitHub tokens last 1 hour)
-            expiry = time.time() + 3500  # 58 minutes
-            
-            # Update cache
-            self._tokens[installation_id] = (token, expiry)
-            logger.info(f"Generated new installation token for {installation_id}")
-            return token
+            with open("guidelines.md", "r") as f:
+                return f.read()
         except Exception as e:
-            logger.error(f"Failed to get installation token: {str(e)}")
-            raise
+            logger.error(f"Failed to load guidelines in mcp_client: {str(e)}")
+            return ""
 
-# Global auth handler
-_auth_handler = None
+    def build_prompts(repo: str, pr_id: int, guidelines: str) -> tuple[str, str]:
+        parser = StrOutputParser()
 
-def get_installation_token(installation_id):
-    """Public function to get installation token"""
-    global _auth_handler
-    if not _auth_handler:
-        try:
-            _auth_handler = GitHubAppAuth()
-        except Exception as e:
-            logger.error(f"Auth handler init failed: {str(e)}")
-            return None
-    
-    return _auth_handler.get_installation_token(installation_id)
+        review_prompt_template = ChatPromptTemplate.from_messages(
+            [
+                ("system", """<s>[INST] <<SYS>>
+                You are an expert code reviewer. Follow these guidelines:
+                {guidelines}
 
-def send_to_mcp(pr_details, mcp_url):
-    """
-    Send PR data to MCP server for review and return the review payload.
-
-    Args:
-        pr_details (dict): Dictionary containing PR details (repo, pr_id, diff_url, commit_sha, installation_id).
-        mcp_url (str): The URL of the MCP server.
-
-    Returns:
-        dict or None: The review payload from the MCP server if successful, None otherwise.
-    """
-    try:
-        installation_id = pr_details['installation_id']
-        access_token = get_installation_token(installation_id) # This should be the App's installation token
-        
-        if not access_token:
-            logger.error("No access token available for fetching diff.")
-            return None
-        
-        # Get PR diff using the installation token
-        diff_content = get_pr_diff(pr_details['diff_url'], access_token)
-        
-        # Prepare payload for MCP server
-        payload = {
-            "repo": pr_details['repo'],
-            "pr_id": pr_details['pr_id'],
-            "diff": diff_content,
-            "metadata": {
-                "commit_sha": pr_details['commit_sha'],
-                "installation_id": installation_id
-            }
-        }
-        
-        # Send to MCP server
-        response = requests.post(
-            f"{mcp_url}/review",
-            json=payload,
-            timeout=120
+                Review tasks:
+                1. Summarize changes in this diff chunk
+                2. Add line comments (format: FILE:LINE: COMMENT)
+                3. Flag security vulnerabilities (format: SECURITY:FILE:LINE: ISSUE)
+                <</SYS>>"""), 
+                ("human", "{diff_chunk}") 
+            ]
         )
-        response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
         
-        review_payload = response.json()
-        logger.info(f"Sent PR #{pr_details['pr_id']} to MCP successfully. Received review payload.")
-        return review_payload # Return the review payload
-    except requests.exceptions.RequestException as e:
-        logger.error(f"HTTP error sending to MCP or receiving response: {str(e)}")
-    except Exception as e:
-        logger.error(f"Failed to send to MCP or process response: {str(e)}")
-    return None # Return None on failure
+        review_prompt_content = parser.parse(review_prompt_template.format_messages(
+            guidelines=guidelines,
+            diff_chunk="" 
+        )[0].content)
+
+        summary_prompt_template = ChatPromptTemplate.from_messages(
+            [
+                ("human", f"Generate concise summary of PR #{pr_id} in {repo} based on these comments:\n\n{{comments_text}}")
+            ]
+        )
+        
+        summary_prompt_content = parser.parse(summary_prompt_template.format_messages(
+            pr_id=pr_id,
+            repo=repo,
+            comments_text="" 
+        )[0].content)
+
+        return review_prompt_content, summary_prompt_content
+
+    async def send_review_request(self, pr_details: dict) -> dict | None:
+        try:
+            installation_id = pr_details['installation_id']
+            access_token = self.github_utils.get_installation_token(installation_id)
+
+            if not access_token:
+                logger.error("No access token available for fetching diff.")
+                return None
+            
+            diff_content = self.github_utils.get_pr_diff(pr_details['diff_url'], access_token)
+            guidelines = self.load_guidelines()
+
+            review_prompt_content, summary_prompt_content = self.build_prompts(
+                repo=pr_details['repo'],
+                pr_id=pr_details['pr_id'],
+                guidelines=guidelines
+            )
+            
+            input_data = ReviewInputClient(
+                diff=diff_content,
+                repo=pr_details['repo'],
+                pr_id=pr_details['pr_id'],
+                metadata={
+                    "commit_sha": pr_details['commit_sha'],
+                    "installation_id": installation_id
+                },
+                review_prompt_content=review_prompt_content,
+                summary_prompt_content=summary_prompt_content
+            )
+            
+            logger.info(f"Sending PR #{pr_details['pr_id']} to MCP server at {self.mcp_url} for review.")
+            
+            # Corrected usage of fastmcp.client.Client
+            async with self.model_client as client:
+                review_payload_client_model = await client.call_model(
+                    model_name="pr_review_model", 
+                    inputs=input_data.model_dump() 
+                )
+            
+            review_payload = review_payload_client_model.model_dump()
+            
+            logger.info(f"Received review payload for PR #{pr_details['pr_id']} from MCP successfully.")
+            return review_payload 
+        except requests.exceptions.RequestException as e:
+            logger.error(f"HTTP error sending to MCP or receiving response: {str(e)}")
+        except Exception as e:
+            logger.error(f"Failed to send to MCP or process response: {str(e)}")
+        return None
+
+    def check_mcp_server_health(self) -> str:
+        if not self.mcp_url:
+            return "not_configured"
+        try:
+            mcp_response = requests.get(f"{self.mcp_url}/health", timeout=3) 
+            if mcp_response.status_code == 200:
+                return "reachable"
+            else:
+                return f"unreachable (status: {mcp_response.status_code})"
+        except requests.exceptions.RequestException as e:
+            logger.error(f"MCP server health check failed: {e}")
+            return f"unreachable (error: {e})"
+        except Exception as e:
+            logger.error(f"Unexpected error during MCP server health check: {e}")
+            return f"unreachable (unexpected error: {e})"
