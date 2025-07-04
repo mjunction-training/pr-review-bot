@@ -75,7 +75,7 @@ class GitHubUtils:
         return hmac.compare_digest(calculated_digest, hex_digest)
 
     def parse_github_webhook(self, request_data: bytes, signature: str, event_header: str) -> tuple[str, dict]:
-        if not self._validate_webhook_signature(request_data, signature, self.webhook_secret):
+        if not self.validate_webhook_signature(request_data, signature, self.webhook_secret):
             raise ValueError("Invalid webhook signature")
 
         payload = json.loads(request_data)
