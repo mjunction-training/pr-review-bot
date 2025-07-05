@@ -4,7 +4,8 @@ import logging
 from github_utils import GitHubUtils
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from fastmcp.client import Client # This import is correct
+from fastmcp.client import Client
+from fastmcp.client.transports import StreamableHttpTransport
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
@@ -43,8 +44,12 @@ class MCPClient:
             logger.error("MCP_SERVER_URL environment variable not set.")
             raise ValueError("MCP_SERVER_URL must be provided or set as an environment variable.")
 
-        # --- IMPORTANT CHANGE: Initialize the FastMCP client here ---
-        self.mcp_client = Client(server_url=self.mcp_url)
+        # --- IMPORTANT CHANGES HERE ---
+        # 1. Initialize the HTTP transport
+        self.transport = StreamableHttpTransport(url=self.mcp_url)
+        # 2. Pass the transport to the FastMCP client
+        self.mcp_client = Client(server_url=self.mcp_url, transport=self.transport)
+        # --- END IMPORTANT CHANGES ---
 
     def load_guidelines(self) -> str:
         try:
