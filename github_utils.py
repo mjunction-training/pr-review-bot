@@ -5,7 +5,6 @@ import hmac
 import hashlib
 import json
 from github import Github, GithubIntegration
-from github.Commit import Commit
 
 logger = logging.getLogger(__name__)
 
@@ -154,11 +153,13 @@ class GitHubUtils:
 
             line_comments = review_payload.get('comments', [])
             if line_comments:
-                latest_commit_id = pull_request.head.sha 
+                latest_commit_id = pull_request.head.sha
+                latest_commit = pull_request.get_commits().reversed[0]
                 for line_comment in line_comments:
                     try:
                         pull_request.create_review_comment(
                             body=line_comment['comment'],
+                            commit=latest_commit,
                             path=line_comment['file'],
                             line=line_comment['line']
                         )
