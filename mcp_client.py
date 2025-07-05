@@ -91,7 +91,7 @@ class MCPClient:
             if not access_token:
                 logger.error("No access token available for fetching diff.")
                 return None
-            
+
             diff_content = self.github_utils.get_pr_diff(pr_details['diff_url'], access_token)
             guidelines = self.load_guidelines()
 
@@ -100,7 +100,7 @@ class MCPClient:
                 pr_id=pr_details['pr_id'],
                 guidelines=guidelines
             )
-            
+
             input_data = ReviewInputClient(
                 diff=diff_content,
                 repo=pr_details['repo'],
@@ -112,30 +112,41 @@ class MCPClient:
                 review_prompt_content=review_prompt_content,
                 summary_prompt_content=summary_prompt_content
             )
-            
-            logger.info(f"Sending PR #{pr_details['pr_id']} to MCP server at {self.mcp_url} for review.")
 
+            target_url = f"{self.mcp_url}/mcp/pr_review_model"
             headers = {
-                "Accept": "application/json",  # Re-add this header
-                "Content-Type": "application/json" 
+                "Accept": "application/json",  # Ensure this is explicitly set
+                "Content-Type": "application/json"
             }
 
+            logger.info(f"Attempting to send PR #{pr_details['pr_id']} to MCP server.")
+            logger.info(f"Request URL: {target_url}")
+            logger.info(f"Request Headers: {headers}")
+            # Log a snippet of the payload, as it can be very large
+            logger.info(f"Request Payload (first 500 chars): {str(input_data.model_dump())[:500]}...")
+
             response = requests.post(
-                f"{self.mcp_url}/mcp/pr_review_model",
+                target_url,
                 json=input_data.model_dump(),
                 headers=headers,
                 timeout=600
             )
-            response.raise_for_status()
+
+            # Log the raw response status and text regardless of success or failure
+            logger.info(f"Raw Response Status Code: {response.status_code}")
+            logger.info(f"Raw Response Headers: {response.headers}")
+            logger.info(f"Raw Response Text: {response.text}") # This will show the actual body of the 406 response
+
+            response.raise_for_status() # This will raise an HTTPError for 4xx/5xx responses
             review_payload = response.json()
 
             logger.info(f"Received review payload for PR #{pr_details['pr_id']} from MCP successfully.")
             return review_payload
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"HTTP error sending to MCP or receiving response: {str(e)}")
+            logger.error(f"HTTP error sending to MCP or receiving response: {str(e)}", exc_info=True)
         except Exception as e:
-            logger.error(f"Failed to send to MCP or process response: {str(e)}")
+            logger.error(f"Failed to send to MCP or process response: {str(e)}", exc_info=True)
         return None
 
     def check_mcp_server_health(self) -> str:
