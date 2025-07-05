@@ -40,13 +40,14 @@ async def handle_webhook():
         return jsonify({"error": "Internal Server Error"}), 500
 
     app.logger.info(f"Received GitHub event: {event}")
+    app.logger.info(f"Requested team: {payload.get('requested_team', {}).get('slug')}")
 
     if event == "pull_request" and payload.get('action') == "review_requested":
         
         pr_details = github.process_pull_request_review_requested(payload)
 
         if pr_details is None:
-            app.logger.info(f"PR event not relevant or malformed. Ignoring. {payload}")
+            app.logger.info(f"PR event not relevant or malformed. Ignoring.")
             return jsonify({"status": "ignored", "reason": "PR event not relevant or malformed"}), 200
         
         if not mcp_client:
