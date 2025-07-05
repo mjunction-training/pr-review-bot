@@ -115,7 +115,7 @@ class MCPClient:
 
             target_url = f"{self.mcp_url}/mcp/pr_review_model"
             headers = {
-                "Accept": "application/json",  # Ensure this is explicitly set
+                "Accept": "application/json, text/event-stream",  # Ensure this is explicitly set
                 "Content-Type": "application/json"
             }
 
