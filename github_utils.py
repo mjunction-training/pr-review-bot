@@ -4,8 +4,7 @@ import logging
 import hmac
 import hashlib
 import json
-import base64
-from github import Github, Auth 
+from github import Github, Auth , Requester
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +28,12 @@ class GitHubUtils:
             raise ValueError("GitHub Private Key must be provided.")
 
         try:
-            self._app_auth_handler = Auth.AppAuth(
+            auth = Auth.AppAuth(
                 app_id=self.app_id,
                 private_key=self.private_key,
             )
+            auth.withRequester(Requester(auth=auth))
+            self._app_auth_handler = auth
         except Exception as e:
             logger.error(f"GitHub AppAuth initialization failed: {e}")
             raise
