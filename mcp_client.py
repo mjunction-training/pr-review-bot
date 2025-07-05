@@ -122,8 +122,9 @@ class MCPClient:
             logger.info(f"Attempting to send PR #{pr_details['pr_id']} to MCP server using fastmcp.client.")
             
             review_payload = await self.mcp_client.call_tool(
-                tool_name="pr_review_model",
-                input_data=input_data.model_dump()
+                name="pr_review_model",
+                arguments=input_data.model_dump(),
+                timeout=600
             )
 
             logger.info(f"Received review payload for PR #{pr_details['pr_id']} from MCP successfully.")
