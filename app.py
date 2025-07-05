@@ -6,7 +6,7 @@ from github_utils import GitHubUtils
 from mcp_client import MCPClient 
 
 app = Flask(__name__)
-app.logger.setLevel(logging.INFO)
+app.logger.setLevel(logging.DEBUG)
 
 try:
     github = GitHubUtils()
