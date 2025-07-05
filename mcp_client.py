@@ -40,9 +40,6 @@ class MCPClient:
         if not self.mcp_url:
             logger.error("MCP_SERVER_URL environment variable not set.")
             raise ValueError("MCP_SERVER_URL must be provided or set as an environment variable.")
-        
-        # Pointing directly to the correct model endpoint
-        self.model_client = Client(f"{self.mcp_url}/mcp/pr_review_model")
 
     def load_guidelines(self) -> str:
         try:
@@ -118,8 +115,13 @@ class MCPClient:
             
             logger.info(f"Sending PR #{pr_details['pr_id']} to MCP server at {self.mcp_url} for review.")
 
-            # Use sync client call
-            review_payload = self.model_client.invoke(input_data.model_dump())
+            response = requests.post(
+                f"{self.mcp_url}/mcp/pr_review_model",
+                json=input_data.model_dump(),
+                timeout=60
+            )
+            response.raise_for_status()
+            review_payload = response.json()
 
             logger.info(f"Received review payload for PR #{pr_details['pr_id']} from MCP successfully.")
             return review_payload
