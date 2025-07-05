@@ -68,7 +68,7 @@ class MCPClient:
     def build_prompts(repo: str, pr_id: int, guidelines: str, diff: str) -> tuple[str, str]:
         # Use double curly braces to escape literal curly braces in f-strings
         review_prompt_content = f"""
-            You are an AI assistant that reviews GitHub Pull Requests.
+            You are a expert code reviewer who reviews GitHub Pull Requests.
             Your task is to provide a comprehensive code review based on the provided guidelines and code changes.
             Focus on identifying potential bugs, security vulnerabilities, performance issues, and maintainability concerns.
             Provide actionable suggestions and code examples where appropriate.
@@ -95,7 +95,7 @@ class MCPClient:
             Summarize the review comments for the following pull request.
             The comments and security issues to be summarized will be provided after this instruction.
             """
-
+        logger.info(f"Building review prompts: {review_prompt_content}, {summary_prompt_content}")
         return review_prompt_content, summary_prompt_content
         
 
