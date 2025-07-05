@@ -128,13 +128,14 @@ class MCPClient:
             
             logger.info(f"Attempting to send PR #{pr_details['pr_id']} to MCP server using fastmcp.client.")
             
-            review_payload = None # Initialize review_payload outside the async with block
+            review_payload = None 
 
-            # --- IMPORTANT CHANGE: Use async with context manager for self.mcp_client ---
-            async with self.mcp_client as client: # <--- ADDED context manager
-                review_payload = await client.call_tool( # <--- Call method on 'client' from context
+            async with self.mcp_client as client: 
+                review_payload = await client.call_tool(
                     name="pr_review_model",
-                    arguments=input_data.model_dump(),
+                    # --- IMPORTANT CHANGE: Wrap input_data.model_dump() in a dict with key 'input_data' ---
+                    arguments={"input_data": input_data.model_dump()}, # <--- THIS IS THE FIX
+                    # --- END IMPORTANT CHANGE ---
                     timeout=600
                 )
 
