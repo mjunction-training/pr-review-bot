@@ -95,8 +95,13 @@ class GitHubUtils:
         commit_sha = pull_request['head']['sha']
         installation_id = payload['installation']['id'] 
 
+        # FIXED: Check both requested_teams (for safety) and requested_team (actual)
         requested_teams = payload.get('requested_teams', [])
-        is_team_requested = any(team['slug'] == self.trigger_team_slug for team in requested_teams)
+        requested_team = payload.get('requested_team')  # single object
+
+        is_team_requested = any(
+            team['slug'] == self.trigger_team_slug for team in requested_teams
+        ) or (requested_team and requested_team['slug'] == self.trigger_team_slug)
 
         if not is_team_requested:
             logger.info(f"Review not requested for team '{self.trigger_team_slug}'. Ignoring PR #{pr_number}.")
@@ -104,14 +109,13 @@ class GitHubUtils:
 
         logger.info(f"Review requested for PR #{pr_number} in {repo_full_name} by team '{self.trigger_team_slug}'.")
 
-        pr_details = {
+        return {
             "repo": repo_full_name,
             "pr_id": pr_number,
             "diff_url": diff_url,
             "commit_sha": commit_sha,
             "installation_id": installation_id
         }
-        return pr_details
 
     def get_pr_diff(self, diff_url: str, access_token: str) -> str:
         headers = {
