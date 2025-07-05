@@ -115,10 +115,16 @@ class MCPClient:
             
             logger.info(f"Sending PR #{pr_details['pr_id']} to MCP server at {self.mcp_url} for review.")
 
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
+
             response = requests.post(
                 f"{self.mcp_url}/mcp/pr_review_model",
                 json=input_data.model_dump(),
-                timeout=60
+                headers=headers,
+                timeout=600
             )
             response.raise_for_status()
             review_payload = response.json()
