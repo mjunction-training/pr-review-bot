@@ -84,6 +84,7 @@ class GitHubUtils:
 
     def process_pull_request_review_requested(self, payload: dict) -> dict | None:
         pull_request = payload.get('pull_request')
+        logger.info(f"Received GitHub event: pull_request {pull_request}")
         if not pull_request:
             logger.error("Missing 'pull_request' object in payload.")
             return None 
