@@ -4,7 +4,8 @@ import logging
 import hmac
 import hashlib
 import json
-from github import Github, GithubIntegration, Auth , Requester
+from github import Github, GithubIntegration
+from github.Commit import Commit
 
 logger = logging.getLogger(__name__)
 
@@ -158,9 +159,8 @@ class GitHubUtils:
                     try:
                         pull_request.create_review_comment(
                             body=line_comment['comment'],
-                            commit_id=latest_commit_id,
                             path=line_comment['file'],
-                            position=line_comment['line']
+                            line=line_comment['line']
                         )
                         logger.info(f"Posted line comment: {line_comment['file']}:{line_comment['line']}")
                     except Exception as e:

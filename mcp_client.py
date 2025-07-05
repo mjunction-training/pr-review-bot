@@ -2,8 +2,6 @@ import os
 import requests
 import logging
 from github_utils import GitHubUtils
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
 from fastmcp.client import Client
 from fastmcp.client.transports import StreamableHttpTransport
 from pydantic import BaseModel
@@ -66,7 +64,6 @@ class MCPClient:
             return ""
 
     def build_prompts(self, repo: str, pr_id: int, guidelines: str, diff: str) -> tuple[str, str]:
-        # --- IMPORTANT CHANGE: Escaped curly braces in JSON example ---
         review_prompt_content = f"""
             You are an AI assistant that reviews GitHub Pull Requests.
             Your task is to provide a comprehensive code review based on the provided guidelines and code changes.
@@ -86,34 +83,17 @@ class MCPClient:
             {diff}
             </diff>
 
-            Please provide your review in the following JSON format:
-            {{{{
-                "summary": "A concise summary of the overall review.",
-                "comments": [
-                    {{{{
-                        "file": "path/to/file.py",
-                        "line": 123,
-                        "comment": "Your detailed comment for this line."
-                    }}}}
-                ],
-                "security_issues": [
-                    {{{{
-                        "file": "path/to/file.py",
-                        "line": 45,
-                        "issue": "Description of the security vulnerability."
-                    }}}}
-                ]
-            }}}}
-            Ensure the JSON is valid and complete.
+            Please provide your review in the following format:
+            For regular comments: <file>:<line number>:<comment>
+            For security issues: SECURITY:<file>:<line number>:<issue description>
             """
-        # --- END IMPORTANT CHANGE ---
-
+        
         summary_prompt_content = f"""
             Summarize the review comments for the following pull request.
             The comments and security issues to be summarized will be provided after this instruction.
             """
         return review_prompt_content, summary_prompt_content
-    
+        
 
     async def send_review_request(self, pr_details: dict) -> dict | None:
         try:
