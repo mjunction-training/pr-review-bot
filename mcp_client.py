@@ -42,7 +42,7 @@ class MCPClient:
             raise ValueError("MCP_SERVER_URL must be provided or set as an environment variable.")
         self.model_client = Client(f"{self.mcp_url}/mcp")
 
-    def load_guidelines() -> str:
+    def load_guidelines(self) -> str:
         try:
             with open("guidelines.md", "r") as f:
                 return f.read()
@@ -50,7 +50,7 @@ class MCPClient:
             logger.error(f"Failed to load guidelines in mcp_client: {str(e)}")
             return ""
 
-    def build_prompts(repo: str, pr_id: int, guidelines: str) -> tuple[str, str]:
+    def build_prompts(self, repo: str, pr_id: int, guidelines: str) -> tuple[str, str]:
         parser = StrOutputParser()
 
         review_prompt_template = ChatPromptTemplate.from_messages(
