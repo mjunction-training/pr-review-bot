@@ -89,12 +89,12 @@ class MCPClient:
             Please provide your review in the following format:
             For regular comments: <file>:<line number>:<comment>
             For security issues: SECURITY:<file>:<line number>:<issue description>
-            """.replace("{", "{{").replace("}", "}}")  # Escape all curly braces
+            """
 
         summary_prompt_content = f"""
             Summarize the review comments for the following pull request.
             The comments and security issues to be summarized will be provided after this instruction.
-            """.replace("{", "{{").replace("}", "}}")  # Escape all curly braces
+            """
 
         return review_prompt_content, summary_prompt_content
         
