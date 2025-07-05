@@ -1,10 +1,12 @@
-import os
-import requests
-import logging
-import hmac
 import hashlib
+import hmac
 import json
-from github import Github, GithubIntegration
+import logging
+import os
+
+import requests
+from github import Github, Auth
+from github import GithubIntegration as LegacyGithubIntegration
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +30,11 @@ class GitHubUtils:
             raise ValueError("GitHub Private Key must be provided.")
 
         try:
-            self.integration = GithubIntegration(
-                int(self.app_id),
-                self.private_key.replace("\\n", "\n")  # Important if key is from ENV
+            auth = Auth.AppAuth(
+                app_id=int(self.app_id),
+                private_key=self.private_key.replace("\\n", "\n")
             )
+            self.integration = LegacyGithubIntegration(auth=auth)
         except Exception as e:
             logger.error(f"GithubIntegration init failed: {e}")
             raise
