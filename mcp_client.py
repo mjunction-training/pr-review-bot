@@ -40,7 +40,7 @@ class MCPClient:
         if not self.mcp_url:
             logger.error("MCP_SERVER_URL environment variable not set.")
             raise ValueError("MCP_SERVER_URL must be provided or set as an environment variable.")
-        self.model_client = Client(f"{self.mcp_url}/mcp")
+        self.model_client = Client(f"{self.mcp_url}/mcp/")
 
     def load_guidelines(self) -> str:
         try:
