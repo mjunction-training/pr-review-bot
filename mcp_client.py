@@ -12,6 +12,7 @@ from typing import List, Dict, Any
 logger = logging.getLogger(__name__)
 
 class ReviewInputClient(BaseModel):
+    """Schema for the input payload to the PR review model on the client side."""
     diff: str
     repo: str
     pr_id: int
@@ -20,21 +21,23 @@ class ReviewInputClient(BaseModel):
     summary_prompt_content: str
 
 class CommentClient(BaseModel):
+    """Schema for a single line comment on the client side."""
     file: str
     line: int
     comment: str
 
 class SecurityIssueClient(BaseModel):
+    """Schema for a single security issue on the client side."""
     file: str
     line: int
     issue: str
 
 class ReviewOutputClient(BaseModel):
+    """Schema for the output payload from the PR review model on the client side."""
     summary: str
     comments: List[CommentClient]
     security_issues: List[SecurityIssueClient]
 # --- End BaseModel classes ---
-
 
 class MCPClient:
     def __init__(self, github_utils: GitHubUtils):
@@ -44,13 +47,11 @@ class MCPClient:
             logger.error("MCP_SERVER_URL environment variable not set.")
             raise ValueError("MCP_SERVER_URL must be provided or set as an environment variable.")
 
-        # --- IMPORTANT NEW CHANGE HERE ---
         # Ensure mcp_url explicitly ends with '/mcp/'
         self.mcp_url = self.mcp_url.rstrip('/') # Remove any existing trailing slash
         if not self.mcp_url.endswith('/mcp'):
             self.mcp_url = f"{self.mcp_url}/mcp" # Ensure it has /mcp
         self.mcp_url = f"{self.mcp_url}/" # Explicitly add the trailing slash
-        # --- END IMPORTANT NEW CHANGE ---
         
         self.transport = StreamableHttpTransport(url=self.mcp_url)
         self.mcp_client = Client(transport=self.transport)
@@ -64,6 +65,7 @@ class MCPClient:
             return ""
 
     def build_prompts(self, repo: str, pr_id: int, guidelines: str, diff: str) -> tuple[str, str]:
+        # --- IMPORTANT CHANGE: Escaped curly braces in JSON example ---
         review_prompt_content = f"""
             You are an AI assistant that reviews GitHub Pull Requests.
             Your task is to provide a comprehensive code review based on the provided guidelines and code changes.
@@ -84,32 +86,31 @@ class MCPClient:
             </diff>
 
             Please provide your review in the following JSON format:
-            {{
+            {{{{
                 "summary": "A concise summary of the overall review.",
                 "comments": [
-                    {{
+                    {{{{
                         "file": "path/to/file.py",
                         "line": 123,
                         "comment": "Your detailed comment for this line."
-                    }}
+                    }}}}
                 ],
                 "security_issues": [
-                    {{
+                    {{{{
                         "file": "path/to/file.py",
                         "line": 45,
                         "issue": "Description of the security vulnerability."
-                    }}
+                    }}}}
                 ]
-            }}
+            }}}}
             Ensure the JSON is valid and complete.
             """
+        # --- END IMPORTANT CHANGE ---
 
-        # --- IMPORTANT CHANGE: Remove the placeholder from summary_prompt_content ---
         summary_prompt_content = f"""
             Summarize the review comments for the following pull request.
             The comments and security issues to be summarized will be provided after this instruction.
             """
-        # --- END IMPORTANT CHANGE ---
         return review_prompt_content, summary_prompt_content
     
 
@@ -151,9 +152,7 @@ class MCPClient:
             async with self.mcp_client as client: 
                 review_payload = await client.call_tool(
                     name="pr_review_model",
-                    # --- IMPORTANT CHANGE: Wrap input_data.model_dump() in a dict with key 'input_data' ---
-                    arguments={"input_data": input_data.model_dump()}, # <--- THIS IS THE FIX
-                    # --- END IMPORTANT CHANGE ---
+                    arguments={"input_data": input_data.model_dump()},
                     timeout=600
                 )
 
@@ -168,14 +167,16 @@ class MCPClient:
         if not self.mcp_url:
             return "not_configured"
         try:
-            mcp_response = requests.get(f"{self.mcp_url}/health", timeout=3)
+            # Corrected health check URL path
+            health_url = self.mcp_url.replace("/mcp/", "/health")
+            mcp_response = requests.get(health_url, timeout=3) 
             if mcp_response.status_code == 200:
                 return "reachable"
             else:
                 return f"unreachable (status: {mcp_response.status_code})"
         except requests.exceptions.RequestException as e:
             logger.error(f"MCP server health check failed: {e}")
-            return f"unreachable (error: {e})"
+            return f"unreachable (error: {e})".
         except Exception as e:
             logger.error(f"Unexpected error during MCP server health check: {e}")
             return f"unreachable (unexpected error: {e})"
