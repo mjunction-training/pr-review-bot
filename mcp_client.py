@@ -40,6 +40,8 @@ class MCPClient:
         if not self.mcp_url:
             logger.error("MCP_SERVER_URL environment variable not set.")
             raise ValueError("MCP_SERVER_URL must be provided or set as an environment variable.")
+        
+        # Pointing directly to the correct model endpoint
         self.model_client = Client(f"{self.mcp_url}/mcp/pr_review_model")
 
     def load_guidelines(self) -> str:
@@ -53,36 +55,33 @@ class MCPClient:
     def build_prompts(self, repo: str, pr_id: int, guidelines: str) -> tuple[str, str]:
         parser = StrOutputParser()
 
-        review_prompt_template = ChatPromptTemplate.from_messages(
-            [
-                ("system", """<s>[INST] <<SYS>>
-                You are an expert code reviewer. Follow these guidelines:
-                {guidelines}
+        review_prompt_template = ChatPromptTemplate.from_messages([
+            ("system", (
+                "<s>[INST] <<SYS>>\n"
+                "You are an expert code reviewer. Follow these guidelines:\n"
+                "{guidelines}\n"
+                "Review tasks:\n"
+                "1. Summarize changes in this diff chunk\n"
+                "2. Add line comments (format: FILE:LINE: COMMENT)\n"
+                "3. Flag security vulnerabilities (format: SECURITY:FILE:LINE: ISSUE)\n"
+                "<</SYS>>"
+            )),
+            ("human", "{diff_chunk}")
+        ])
 
-                Review tasks:
-                1. Summarize changes in this diff chunk
-                2. Add line comments (format: FILE:LINE: COMMENT)
-                3. Flag security vulnerabilities (format: SECURITY:FILE:LINE: ISSUE)
-                <</SYS>>"""), 
-                ("human", "{diff_chunk}") 
-            ]
-        )
-        
         review_prompt_content = parser.parse(review_prompt_template.format_messages(
             guidelines=guidelines,
-            diff_chunk="" 
+            diff_chunk=""
         )[0].content)
 
-        summary_prompt_template = ChatPromptTemplate.from_messages(
-            [
-                ("human", f"Generate concise summary of PR #{pr_id} in {repo} based on these comments:\n\n{{comments_text}}")
-            ]
-        )
-        
+        summary_prompt_template = ChatPromptTemplate.from_messages([
+            ("human", f"Generate concise summary of PR #{pr_id} in {repo} based on these comments:\n\n{{comments_text}}")
+        ])
+
         summary_prompt_content = parser.parse(summary_prompt_template.format_messages(
             pr_id=pr_id,
             repo=repo,
-            comments_text="" 
+            comments_text=""
         )[0].content)
 
         return review_prompt_content, summary_prompt_content
@@ -118,15 +117,13 @@ class MCPClient:
             )
             
             logger.info(f"Sending PR #{pr_details['pr_id']} to MCP server at {self.mcp_url} for review.")
-            
-            # Corrected usage of fastmcp.client.Client
-            async with self.model_client as client:
-                review_payload_client_model = await client.ainvoke(input_data.model_dump())
-            
-            review_payload = review_payload_client_model.model_dump()
-            
+
+            # Use sync client call
+            review_payload = self.model_client.invoke(input_data.model_dump())
+
             logger.info(f"Received review payload for PR #{pr_details['pr_id']} from MCP successfully.")
-            return review_payload 
+            return review_payload
+
         except requests.exceptions.RequestException as e:
             logger.error(f"HTTP error sending to MCP or receiving response: {str(e)}")
         except Exception as e:
