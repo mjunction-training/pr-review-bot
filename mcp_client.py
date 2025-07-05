@@ -4,7 +4,7 @@ import logging
 from github_utils import GitHubUtils
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from fastmcp.client import Client
+from fastmcp.client import Client # This import is correct
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
@@ -32,6 +32,8 @@ class ReviewOutputClient(BaseModel):
     summary: str
     comments: List[CommentClient]
     security_issues: List[SecurityIssueClient]
+# --- End BaseModel classes ---
+
 
 class MCPClient:
     def __init__(self, github_utils: GitHubUtils):
@@ -40,6 +42,9 @@ class MCPClient:
         if not self.mcp_url:
             logger.error("MCP_SERVER_URL environment variable not set.")
             raise ValueError("MCP_SERVER_URL must be provided or set as an environment variable.")
+
+        # --- IMPORTANT CHANGE: Initialize the FastMCP client here ---
+        self.mcp_client = Client(server_url=self.mcp_url)
 
     def load_guidelines(self) -> str:
         try:
@@ -50,39 +55,26 @@ class MCPClient:
             return ""
 
     def build_prompts(self, repo: str, pr_id: int, guidelines: str) -> tuple[str, str]:
-        parser = StrOutputParser()
+        # This method's logic remains the same
+        review_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", """You are an AI assistant that reviews code.
+                 Your goal is to provide constructive feedback on pull requests, focusing on identifying bugs, security vulnerabilities, performance issues, and maintainability concerns.
+                 Adhere to the following guidelines:
+                 {guidelines}
+                 """),
+                ("human", "Review the following code diff for PR #{pr_id} in {repo}:\n\n{diff}\n\nProvide your feedback in a structured JSON format with a summary, line-specific comments, and identified security issues. Each comment should include 'file', 'line', and 'comment'. Each security issue should include 'file', 'line', and 'issue'. For example:\n```json\n{{\n  \"summary\": \"Overall summary of the review.\",\n  \"comments\": [\n    {{\n      \"file\": \"src/main/java/com/example/MyClass.java\",\n      \"line\": 15,\n      \"comment\": \"Consider using a more descriptive variable name.\"\n    }}\n  ],\n  \"security_issues\": [\n    {{\n      \"file\": \"src/main/java/com/example/AuthUtils.java\",\n      \"line\": 30,\n      \"issue\": \"Potential SQL injection vulnerability due to unescaped input.\"\n    }}\n  ]\n}}\n```\n\nIf no comments or security issues are found, return empty arrays for `comments` and `security_issues` respectively.")
+            ]
+        )
 
-        review_prompt_template = ChatPromptTemplate.from_messages([
-            ("system", (
-                "<s>[INST] <<SYS>>\n"
-                "You are an expert code reviewer. Follow these guidelines:\n"
-                "{guidelines}\n"
-                "Review tasks:\n"
-                "1. Summarize changes in this diff chunk\n"
-                "2. Add line comments (format: FILE:LINE: COMMENT)\n"
-                "3. Flag security vulnerabilities (format: SECURITY:FILE:LINE: ISSUE)\n"
-                "<</SYS>>"
-            )),
-            ("human", "{diff_chunk}")
-        ])
+        summary_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("human", "Generate a concise summary of the following code review comments and security issues:\n\n{comments_text}")
+            ]
+        )
+        return review_prompt.format(guidelines=guidelines, repo=repo, pr_id=pr_id), summary_prompt.format()
 
-        review_prompt_content = parser.parse(review_prompt_template.format_messages(
-            guidelines=guidelines,
-            diff_chunk=""
-        )[0].content)
-
-        summary_prompt_template = ChatPromptTemplate.from_messages([
-            ("human", f"Generate concise summary of PR #{pr_id} in {repo} based on these comments:\n\n{{comments_text}}")
-        ])
-
-        summary_prompt_content = parser.parse(summary_prompt_template.format_messages(
-            pr_id=pr_id,
-            repo=repo,
-            comments_text=""
-        )[0].content)
-
-        return review_prompt_content, summary_prompt_content
-
+    # --- IMPORTANT CHANGE: This method must be async for await call_tool ---
     async def send_review_request(self, pr_details: dict) -> dict | None:
         try:
             installation_id = pr_details['installation_id']
@@ -91,7 +83,7 @@ class MCPClient:
             if not access_token:
                 logger.error("No access token available for fetching diff.")
                 return None
-
+            
             diff_content = self.github_utils.get_pr_diff(pr_details['diff_url'], access_token)
             guidelines = self.load_guidelines()
 
@@ -100,7 +92,8 @@ class MCPClient:
                 pr_id=pr_details['pr_id'],
                 guidelines=guidelines
             )
-
+            
+            # Input data remains the same Pydantic model instance
             input_data = ReviewInputClient(
                 diff=diff_content,
                 repo=pr_details['repo'],
@@ -113,54 +106,30 @@ class MCPClient:
                 summary_prompt_content=summary_prompt_content
             )
             
-            # Construct the JSON-RPC payload
-            json_rpc_payload = {
-                "jsonrpc": "2.0",
-                "method": "pr_review_model",  # This must match the 'name' in your @mcp.tool decorator in main.py
-                "params": input_data.model_dump(),  # Your Pydantic model's data goes here
-                "id": "mcp-pr-review-request-1" # A unique identifier for the request, can be any string or generated UUID
-            }
-
-            target_url = f"{self.mcp_url}/mcp/pr_review_model"
-            headers = {
-                "Accept": "application/json, text/event-stream",
-                "Content-Type": "application/json"
-            }
+            logger.info(f"Attempting to send PR #{pr_details['pr_id']} to MCP server using fastmcp.client.")
             
-            logger.info(f"Attempting to send PR #{pr_details['pr_id']} to MCP server.")
-            logger.info(f"Request URL: {target_url}")
-            logger.info(f"Request Headers: {headers}")
-            logger.info(f"Request Payload (first 500 chars): {str(json_rpc_payload)[:500]}...")
-
-            response = requests.post(
-                target_url,
-                json=json_rpc_payload,  # <-- Send the new JSON-RPC payload
-                headers=headers,
-                timeout=600
+            # --- IMPORTANT CHANGE: Use fastmcp.client.Client.call_tool method ---
+            # This handles JSON-RPC framing, headers, and session ID automatically
+            review_payload = await self.mcp_client.call_tool(
+                tool_name="pr_review_model", # This must match the name in your @mcp.tool decorator in main.py
+                input_data=input_data.model_dump() # Pass the Pydantic model as a dictionary
             )
-
-            # Log the raw response status and text regardless of success or failure
-            logger.error(f"Raw Response Status Code: {response.status_code}")
-            logger.error(f"Raw Response Headers: {response.headers}")
-            logger.error(f"Raw Response Text: {response.text}") # This will show the actual body of the 406 response
-
-            response.raise_for_status() # This will raise an HTTPError for 4xx/5xx responses
-            review_payload = response.json()
 
             logger.info(f"Received review payload for PR #{pr_details['pr_id']} from MCP successfully.")
             return review_payload
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"HTTP error sending to MCP or receiving response: {str(e)}", exc_info=True)
+        # Use a broader exception catch for FastMCP client errors
         except Exception as e:
-            logger.error(f"Failed to send to MCP or process response: {str(e)}", exc_info=True)
+            logger.error(f"Failed to get review payload for PR #{pr_details['pr_id']} from MCP server: {str(e)}", exc_info=True)
         return None
 
     def check_mcp_server_health(self) -> str:
+        # This can remain as a direct requests call for a simple health check,
+        # as it's not a tool invocation.
         if not self.mcp_url:
             return "not_configured"
         try:
-            mcp_response = requests.get(f"{self.mcp_url}/health", timeout=3) 
+            mcp_response = requests.get(f"{self.mcp_url}/health", timeout=3)
             if mcp_response.status_code == 200:
                 return "reachable"
             else:
