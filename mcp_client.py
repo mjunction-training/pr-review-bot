@@ -45,10 +45,12 @@ class MCPClient:
             raise ValueError("MCP_SERVER_URL must be provided or set as an environment variable.")
 
         # --- IMPORTANT NEW CHANGE HERE ---
-        # Ensure the URL points to the FastMCP RPC endpoint, typically /mcp
+        # Ensure mcp_url explicitly ends with '/mcp/'
+        self.mcp_url = self.mcp_url.rstrip('/') # Remove any existing trailing slash
         if not self.mcp_url.endswith('/mcp'):
-            self.mcp_url = f"{self.mcp_url.rstrip('/')}/mcp"
-        # --- END IMPORTANT NEW CHANGE --
+            self.mcp_url = f"{self.mcp_url}/mcp" # Ensure it has /mcp
+        self.mcp_url = f"{self.mcp_url}/" # Explicitly add the trailing slash
+        # --- END IMPORTANT NEW CHANGE ---
         
         self.transport = StreamableHttpTransport(url=self.mcp_url)
         self.mcp_client = Client(transport=self.transport)
