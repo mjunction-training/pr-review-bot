@@ -48,7 +48,7 @@ class MCPClient:
         # 1. Initialize the HTTP transport
         self.transport = StreamableHttpTransport(url=self.mcp_url)
         # 2. Pass the transport to the FastMCP client
-        self.mcp_client = Client(server_url=self.mcp_url, transport=self.transport)
+        self.mcp_client = Client(transport=self.transport)
         # --- END IMPORTANT CHANGES ---
 
     def load_guidelines(self) -> str:
