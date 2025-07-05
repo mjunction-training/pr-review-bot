@@ -118,7 +118,8 @@ class GitHubUtils:
             "installation_id": installation_id
         }
 
-    def get_pr_diff(self, diff_url: str, access_token: str) -> str:
+    @staticmethod
+    def get_pr_diff(diff_url: str, access_token: str) -> str:
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/vnd.github.v3.diff",
@@ -133,7 +134,8 @@ class GitHubUtils:
             logger.error(f"Failed to fetch diff from {diff_url}: {str(e)}")
             raise
 
-    def add_pr_review_comments(self, repo_full_name: str, pr_number: int, github_client: Github, review_payload: dict):
+    @staticmethod
+    def add_pr_review_comments(repo_full_name: str, pr_number: int, github_client: Github, review_payload: dict):
         logger.info(f"Attempting to add review comments to {repo_full_name} PR #{pr_number}")
         pull_request = None
 
@@ -156,7 +158,7 @@ class GitHubUtils:
 
             line_comments = review_payload.get('comments', [])
             if line_comments:
-                latest_commit_id = pull_request.head.sha
+                #latest_commit_id = pull_request.head.sha
                 latest_commit = pull_request.get_commits().reversed[0]
                 for line_comment in line_comments:
                     try:
@@ -186,7 +188,8 @@ class GitHubUtils:
                 except Exception as comment_e:
                     logger.error(f"Could not post error comment about commenting failure: {comment_e}")
 
-    def check_github_api_health(self) -> str:
+    @staticmethod
+    def check_github_api_health() -> str:
         try:
             response = requests.get("https://api.github.com/", timeout=3)
             if response.ok:

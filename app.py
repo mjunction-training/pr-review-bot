@@ -29,14 +29,14 @@ async def handle_webhook():
             request_data=request.data,
             signature=request.headers.get('X-Hub-Signature-256')
         )
-    except ValueError as e:
-        app.logger.warning(f"Webhook validation failed: {e}")
-        return jsonify({"error": "Unauthorized"}), 401
-    except json.JSONDecodeError as e:
-        app.logger.error(f"Failed to parse webhook payload as JSON: {e}")
+    except json.JSONDecodeError as json_exception:
+        app.logger.error(f"Failed to parse webhook payload as JSON: {json_exception}")
         return jsonify({"error": "Bad Request", "message": "Invalid JSON payload"}), 400
-    except Exception as e:
-        app.logger.error(f"Unexpected error during webhook parsing: {e}")
+    except ValueError as json_exception:
+        app.logger.warning(f"Webhook validation failed: {json_exception}")
+        return jsonify({"error": "Unauthorized"}), 401
+    except Exception as json_exception:
+        app.logger.error(f"Unexpected error during webhook parsing: {json_exception}")
         return jsonify({"error": "Internal Server Error"}), 500
 
     app.logger.info(f"Received GitHub event: {event}")
@@ -64,9 +64,9 @@ async def handle_webhook():
                 github.add_pr_review_comments(pr_details['repo'], pr_details['pr_id'], github_client, review_payload)
 
                 return jsonify({"status": "success", "message": "PR review comments posted."}), 200
-            except Exception as e:
-                app.logger.error(f"Failed to post PR review comments for PR #{pr_details['pr_id']}: {e}")
-                return jsonify({"status": "error", "message": f"Failed to post PR review comments: {e}"}), 500
+            except Exception as json_exception:
+                app.logger.error(f"Failed to post PR review comments for PR #{pr_details['pr_id']}: {json_exception}")
+                return jsonify({"status": "error", "message": f"Failed to post PR review comments: {json_exception}"}), 500
         else:
             app.logger.error(f"Failed to get review payload for PR #{pr_details['pr_id']} from MCP server.")
             return jsonify({"status": "error", "message": "Failed to get review from MCP server"}), 500
