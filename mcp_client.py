@@ -40,7 +40,7 @@ class MCPClient:
         if not self.mcp_url:
             logger.error("MCP_SERVER_URL environment variable not set.")
             raise ValueError("MCP_SERVER_URL must be provided or set as an environment variable.")
-        self.model_client = Client(f"{self.mcp_url}/mcp/")
+        self.model_client = Client(f"{self.mcp_url}/mcp/pr_review_model")
 
     def load_guidelines(self) -> str:
         try:
@@ -121,10 +121,7 @@ class MCPClient:
             
             # Corrected usage of fastmcp.client.Client
             async with self.model_client as client:
-                review_payload_client_model = await client.call_model(
-                    model_name="pr_review_model", 
-                    inputs=input_data.model_dump() 
-                )
+                review_payload_client_model = await client.ainvoke(input_data.model_dump())
             
             review_payload = review_payload_client_model.model_dump()
             
