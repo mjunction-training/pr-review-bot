@@ -119,7 +119,7 @@ class MCPClient:
                 "Content-Type": "application/json"
             }
 
-            logger.info(f"Attempting to send PR #{pr_details['pr_id']} to MCP server.")
+            logger.info(f"Attempting  to send PR #{pr_details['pr_id']} to MCP server.")
             logger.info(f"Request URL: {target_url}")
             logger.info(f"Request Headers: {headers}")
             # Log a snippet of the payload, as it can be very large
