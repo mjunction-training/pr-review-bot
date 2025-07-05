@@ -4,7 +4,7 @@ import logging
 import hmac
 import hashlib
 import json
-from github import Github, Auth , Requester
+from github import Github, GithubIntegration, Auth , Requester
 
 logger = logging.getLogger(__name__)
 
@@ -28,32 +28,29 @@ class GitHubUtils:
             raise ValueError("GitHub Private Key must be provided.")
 
         try:
-            auth = Auth.AppAuth(
-                app_id=self.app_id,
-                private_key=self.private_key,
+            self.integration = GithubIntegration(
+                int(self.app_id),
+                self.private_key.replace("\\n", "\n")  # Important if key is from ENV
             )
-            auth.withRequester(Requester(auth=auth))
-            self._app_auth_handler = auth
         except Exception as e:
-            logger.error(f"GitHub AppAuth initialization failed: {e}")
+            logger.error(f"GithubIntegration init failed: {e}")
             raise
             
-    def get_installation_client(self, installation_id: int) -> Github:
-        if self._app_auth_handler is None:
-            raise RuntimeError("GitHub AppAuth handler not initialized.")
-        try:
-            return Github(auth=self._app_auth_handler.get_installation_auth(installation_id))
-        except Exception as e:
-            logger.error(f"Failed to get GitHub App installation client for installation {installation_id}: {e}")
-            raise
-
     def get_installation_token(self, installation_id: int) -> str:
         try:
-            installation_auth = self._app_auth_handler.get_installation_auth(installation_id)
-            return installation_auth.token
+            access_token = self.integration.get_access_token(installation_id).token
+            return access_token
         except Exception as e:
             logger.error(f"Failed to get installation token for installation {installation_id}: {e}")
             raise RuntimeError(f"Could not retrieve installation token: {e}")
+
+    def get_installation_client(self, installation_id: int) -> Github:
+        try:
+            token = self.get_installation_token(installation_id)
+            return Github(login_or_token=token)
+        except Exception as e:
+            logger.error(f"Failed to create installation client: {e}")
+            raise
         
     def validate_webhook_signature(self, payload: bytes, signature: str) -> bool:
         if not signature or not self.webhook_secret:
