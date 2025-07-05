@@ -119,11 +119,11 @@ class MCPClient:
                 "Content-Type": "application/json"
             }
 
-            logger.info(f"Attempting  to send PR #{pr_details['pr_id']} to MCP server.")
-            logger.info(f"Request URL: {target_url}")
-            logger.info(f"Request Headers: {headers}")
+            logger.error(f"Attempting  to send PR #{pr_details['pr_id']} to MCP server.")
+            logger.error(f"Request URL: {target_url}")
+            logger.error(f"Request Headers: {headers}")
             # Log a snippet of the payload, as it can be very large
-            logger.info(f"Request Payload (first 500 chars): {str(input_data.model_dump())[:500]}...")
+            logger.error(f"Request Payload (first 500 chars): {str(input_data.model_dump())[:500]}...")
 
             response = requests.post(
                 target_url,
@@ -133,9 +133,9 @@ class MCPClient:
             )
 
             # Log the raw response status and text regardless of success or failure
-            logger.info(f"Raw Response Status Code: {response.status_code}")
-            logger.info(f"Raw Response Headers: {response.headers}")
-            logger.info(f"Raw Response Text: {response.text}") # This will show the actual body of the 406 response
+            logger.error(f"Raw Response Status Code: {response.status_code}")
+            logger.error(f"Raw Response Headers: {response.headers}")
+            logger.error(f"Raw Response Text: {response.text}") # This will show the actual body of the 406 response
 
             response.raise_for_status() # This will raise an HTTPError for 4xx/5xx responses
             review_payload = response.json()
