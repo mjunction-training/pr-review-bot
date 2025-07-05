@@ -99,12 +99,11 @@ class MCPClient:
             diff_content = self.github_utils.get_pr_diff(pr_details['diff_url'], access_token)
             guidelines = self.load_guidelines()
 
-            # MODIFIED: Pass diff_content to build_prompts
             review_prompt_content, summary_prompt_content = self.build_prompts(
                 repo=pr_details['repo'],
                 pr_id=pr_details['pr_id'],
                 guidelines=guidelines,
-                diff=diff_content # <-- ADDED this argument
+                diff=diff_content
             )
             
             input_data = ReviewInputClient(
@@ -121,11 +120,15 @@ class MCPClient:
             
             logger.info(f"Attempting to send PR #{pr_details['pr_id']} to MCP server using fastmcp.client.")
             
-            review_payload = await self.mcp_client.call_tool(
-                name="pr_review_model",
-                arguments=input_data.model_dump(),
-                timeout=600
-            )
+            review_payload = None # Initialize review_payload outside the async with block
+
+            # --- IMPORTANT CHANGE: Use async with context manager for self.mcp_client ---
+            async with self.mcp_client as client: # <--- ADDED context manager
+                review_payload = await client.call_tool( # <--- Call method on 'client' from context
+                    name="pr_review_model",
+                    arguments=input_data.model_dump(),
+                    timeout=600
+                )
 
             logger.info(f"Received review payload for PR #{pr_details['pr_id']} from MCP successfully.")
             return review_payload
