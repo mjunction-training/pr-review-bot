@@ -63,37 +63,55 @@ class MCPClient:
             logger.error(f"Failed to load guidelines in mcp_client: {str(e)}")
             return ""
 
-    # MODIFIED: Add 'diff' as a parameter to build_prompts
     def build_prompts(self, repo: str, pr_id: int, guidelines: str, diff: str) -> tuple[str, str]:
-        review_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", """You are an AI assistant that reviews code.
-                Your goal is to provide constructive feedback on pull requests, focusing on identifying bugs, security vulnerabilities, performance issues, and maintainability concerns.
-                Adhere to the following guidelines:
-                {guidelines}
-                """),
-                ("human", "Review the following code diff for PR #{pr_id} in {repo}:\n\n{diff}\n\nProvide your feedback in a structured JSON format with a summary, line-specific comments, and identified security issues. Each comment should include 'file', 'line', and 'comment'. Each security issue should include 'file', 'line', and 'issue'. For example:\n```json\n{{\n  \"summary\": \"Overall summary of the review.\",\n  \"comments\": [\n    {{\n      \"file\": \"src/main/java/com/example/MyClass.java\",\n      \"line\": 15,\n      \"comment\": \"Consider using a more descriptive variable name.\"\n    }}\n  ],\n  \"security_issues\": [\n    {{\n      \"file\": \"src/main/java/com/example/AuthUtils.java\",\n      \"line\": 30,\n      \"issue\": \"Potential SQL injection vulnerability due to unescaped input.\"\n    }}\n  ]\n}}\n```\n\nIf no comments or security issues are found, return empty arrays for `comments` and `security_issues` respectively.")
-            ]
-        )
+        review_prompt_content = f"""
+            You are an AI assistant that reviews GitHub Pull Requests.
+            Your task is to provide a comprehensive code review based on the provided guidelines and code changes.
+            Focus on identifying potential bugs, security vulnerabilities, performance issues, and maintainability concerns.
+            Provide actionable suggestions and code examples where appropriate.
 
-        summary_prompt_template_obj = ChatPromptTemplate.from_messages( # Renamed variable for clarity
-            [
-                ("human", "Generate a concise summary of the following code review comments and security issues:\n\n{comments_text}")
-            ]
-        )
-        
-        # Format the review prompt with all its required variables
-        review_prompt_output = review_prompt.format(
-            guidelines=guidelines,
-            repo=repo,
-            pr_id=pr_id,
-            diff=diff # <-- ADDED 'diff' here
-        )
-        
-        # Get the raw template string for the summary prompt, as it will be formatted later
-        summary_prompt_output = summary_prompt_template_obj.messages[0].prompt.template
+            <review_guidelines>
+            {guidelines}
+            </review_guidelines>
 
-        return review_prompt_output, summary_prompt_output
+            <pr_details>
+            Repository: {repo}
+            Pull Request ID: {pr_id}
+            </pr_details>
+
+            <diff>
+            {diff}
+            </diff>
+
+            Please provide your review in the following JSON format:
+            {{
+                "summary": "A concise summary of the overall review.",
+                "comments": [
+                    {{
+                        "file": "path/to/file.py",
+                        "line": 123,
+                        "comment": "Your detailed comment for this line."
+                    }}
+                ],
+                "security_issues": [
+                    {{
+                        "file": "path/to/file.py",
+                        "line": 45,
+                        "issue": "Description of the security vulnerability."
+                    }}
+                ]
+            }}
+            Ensure the JSON is valid and complete.
+            """
+
+        # --- IMPORTANT CHANGE: Remove the placeholder from summary_prompt_content ---
+        summary_prompt_content = f"""
+            Summarize the review comments for the following pull request.
+            The comments and security issues to be summarized will be provided after this instruction.
+            """
+        # --- END IMPORTANT CHANGE ---
+        return review_prompt_content, summary_prompt_content
+    
 
     async def send_review_request(self, pr_details: dict) -> dict | None:
         try:
