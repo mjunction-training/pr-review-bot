@@ -55,7 +55,8 @@ class MCPClient:
         self.transport = StreamableHttpTransport(url=self.mcp_url)
         self.mcp_client = Client(transport=self.transport)
 
-    def load_guidelines(self) -> str:
+    @staticmethod
+    def load_guidelines() -> str:
         try:
             with open("guidelines.md", "r") as f:
                 return f.read()
@@ -63,7 +64,9 @@ class MCPClient:
             logger.error(f"Failed to load guidelines in mcp_client: {str(e)}")
             return ""
 
-    def build_prompts(self, repo: str, pr_id: int, guidelines: str, diff: str) -> tuple[str, str]:
+    @staticmethod
+    def build_prompts(repo: str, pr_id: int, guidelines: str, diff: str) -> tuple[str, str]:
+        # Use double curly braces to escape literal curly braces in f-strings
         review_prompt_content = f"""
             You are an AI assistant that reviews GitHub Pull Requests.
             Your task is to provide a comprehensive code review based on the provided guidelines and code changes.
@@ -86,12 +89,13 @@ class MCPClient:
             Please provide your review in the following format:
             For regular comments: <file>:<line number>:<comment>
             For security issues: SECURITY:<file>:<line number>:<issue description>
-            """
-        
+            """.replace("{", "{{").replace("}", "}}")  # Escape all curly braces
+
         summary_prompt_content = f"""
             Summarize the review comments for the following pull request.
             The comments and security issues to be summarized will be provided after this instruction.
-            """
+            """.replace("{", "{{").replace("}", "}}")  # Escape all curly braces
+
         return review_prompt_content, summary_prompt_content
         
 
