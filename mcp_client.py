@@ -112,22 +112,29 @@ class MCPClient:
                 review_prompt_content=review_prompt_content,
                 summary_prompt_content=summary_prompt_content
             )
+            
+            # Construct the JSON-RPC payload
+            json_rpc_payload = {
+                "jsonrpc": "2.0",
+                "method": "pr_review_model",  # This must match the 'name' in your @mcp.tool decorator in main.py
+                "params": input_data.model_dump(),  # Your Pydantic model's data goes here
+                "id": "mcp-pr-review-request-1" # A unique identifier for the request, can be any string or generated UUID
+            }
 
             target_url = f"{self.mcp_url}/mcp/pr_review_model"
             headers = {
-                "Accept": "application/json, text/event-stream",  # Ensure this is explicitly set
+                "Accept": "application/json, text/event-stream",
                 "Content-Type": "application/json"
             }
-
-            logger.error(f"Attempting  to send PR #{pr_details['pr_id']} to MCP server.")
-            logger.error(f"Request URL: {target_url}")
-            logger.error(f"Request Headers: {headers}")
-            # Log a snippet of the payload, as it can be very large
-            logger.error(f"Request Payload (first 500 chars): {str(input_data.model_dump())[:500]}...")
+            
+            logger.info(f"Attempting to send PR #{pr_details['pr_id']} to MCP server.")
+            logger.info(f"Request URL: {target_url}")
+            logger.info(f"Request Headers: {headers}")
+            logger.info(f"Request Payload (first 500 chars): {str(json_rpc_payload)[:500]}...")
 
             response = requests.post(
                 target_url,
-                json=input_data.model_dump(),
+                json=json_rpc_payload,  # <-- Send the new JSON-RPC payload
                 headers=headers,
                 timeout=600
             )
