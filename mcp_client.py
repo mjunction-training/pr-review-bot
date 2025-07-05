@@ -116,7 +116,7 @@ class MCPClient:
             logger.info(f"Sending PR #{pr_details['pr_id']} to MCP server at {self.mcp_url} for review.")
 
             headers = {
-                "Accept": "application/json",
+                #"Accept": "application/json",
                 "Content-Type": "application/json"
             }
 
