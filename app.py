@@ -24,10 +24,10 @@ except ValueError as e:
 @app.route('/webhook', methods=['POST'])
 async def handle_webhook():
     try:
-        event, payload = github.parse_github_webhook(
+        event=request.headers.get('X-GitHub-Event')
+        payload = github.parse_github_webhook(
             request_data=request.data,
-            signature=request.headers.get('X-Hub-Signature-256'),
-            event_header=request.headers.get('X-GitHub-Event')
+            signature=request.headers.get('X-Hub-Signature-256')
         )
     except ValueError as e:
         app.logger.warning(f"Webhook validation failed: {e}")
@@ -46,6 +46,7 @@ async def handle_webhook():
         pr_details = github.process_pull_request_review_requested(payload)
 
         if pr_details is None:
+            app.logger.info(f"PR event not relevant or malformed. Ignoring. {payload}")
             return jsonify({"status": "ignored", "reason": "PR event not relevant or malformed"}), 200
         
         if not mcp_client:

@@ -74,12 +74,13 @@ class GitHubUtils:
 
         return hmac.compare_digest(calculated_digest, hex_digest)
 
-    def parse_github_webhook(self, request_data: bytes, signature: str, event_header: str) -> tuple[str, dict]:
+    def parse_github_webhook(self, request_data: bytes, signature: str) -> dict:
         if not self.validate_webhook_signature(request_data, signature):
+            logger.warning("Invalid webhook signature")
             raise ValueError("Invalid webhook signature")
 
         payload = json.loads(request_data)
-        return event_header, payload
+        return payload
 
     def process_pull_request_review_requested(self, payload: dict) -> dict | None:
         pull_request = payload.get('pull_request')
