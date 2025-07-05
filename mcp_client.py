@@ -177,7 +177,7 @@ class MCPClient:
                 return f"unreachable (status: {mcp_response.status_code})"
         except requests.exceptions.RequestException as e:
             logger.error(f"MCP server health check failed: {e}")
-            return f"unreachable (error: {e})".
+            return f"unreachable (error: {e})"
         except Exception as e:
             logger.error(f"Unexpected error during MCP server health check: {e}")
-            return f"unreachable (unexpected error: {e})".
+            return f"unreachable (unexpected error: {e})"
