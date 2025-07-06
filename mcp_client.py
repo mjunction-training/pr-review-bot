@@ -115,7 +115,7 @@ class MCPClient:
 
     @staticmethod
     def build_summary_prompt(review_raw_text: str) -> str:
-        summary_prompt_content = f"""
+        summary_prompt_content = """
             Summarize the review comments for the following pull request.
             The comments and security issues to be summarized are provided below.
             """
@@ -241,7 +241,7 @@ class MCPClient:
             if review_raw_hf_response and review_raw_hf_response.data:
                 try:
                     parsed_content = review_raw_hf_response.data
-                    if parsed_content.get("response_data") and \
+                    if parsed_content.response_data and \
                        isinstance(parsed_content["response_data"], dict) and \
                        "generated_text" in parsed_content["response_data"]:
                         review_raw_text = parsed_content["response_data"]["generated_text"]
@@ -316,7 +316,11 @@ class MCPClient:
 
         except Exception as e:
             logger.error(f"Failed to get review payload for PR #{pr_id} from MCP server: {str(e)}", exc_info=True)
-        return None
+        return ParsedReviewOutput(
+                summary="PR review summary - none",
+                comments=[],
+                security_issues=[]
+            )
 
 
     def check_mcp_server_health(self) -> str:
