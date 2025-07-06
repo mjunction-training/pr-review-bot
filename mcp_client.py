@@ -259,8 +259,11 @@ class MCPClient:
             if not review_raw_text:
                 logger.error(
                     f"Failed to get valid raw review text from LLM response via MCP for PR #{pr_id}. Response: {review_raw_hf_response}")
-                return None
-
+                return ParsedReviewOutput(
+                    summary="PR review summary - none",
+                    comments=[],
+                    security_issues=[]
+                )
 
             logger.info(f"Building summary prompt for PR #{pr_id}.")
             summary_prompt_string = self.build_summary_prompt(review_raw_text=review_raw_text)
