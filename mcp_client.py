@@ -236,13 +236,13 @@ class MCPClient:
 
             logger.info(f"Received MCP response for review generation: {review_raw_hf_response}")
 
-            # Access the result attribute of the CallToolResult object
-            if review_raw_hf_response and review_raw_hf_response.result and \
-               review_raw_hf_response.result.get("response_data") and \
-               isinstance(review_raw_hf_response.result["response_data"], list) and \
-               review_raw_hf_response.result["response_data"][0] and \
-               "generated_text" in review_raw_hf_response.result["response_data"][0]:
-                review_raw_text = review_raw_hf_response.result["response_data"][0]["generated_text"]
+            # Access the structured_content attribute of the CallToolResult object
+            if review_raw_hf_response and review_raw_hf_response.structured_content and \
+               review_raw_hf_response.structured_content.get("response_data") and \
+               isinstance(review_raw_hf_response.structured_content["response_data"], list) and \
+               review_raw_hf_response.structured_content["response_data"][0] and \
+               "generated_text" in review_raw_hf_response.structured_content["response_data"][0]:
+                review_raw_text = review_raw_hf_response.structured_content["response_data"][0]["generated_text"]
                 logger.info(
                     f"Received raw review text from MCP server for PR #{pr_id}. Length: {len(review_raw_text)} chars.")
                 logger.debug(f"Raw review text (first 200 chars): {review_raw_text[:200]}...")
@@ -270,13 +270,13 @@ class MCPClient:
                 )
 
             summary_final_text = "No summary generated."
-            # Access the result attribute of the CallToolResult object
-            if summary_raw_hf_response and summary_raw_hf_response.result and \
-               summary_raw_hf_response.result.get("response_data") and \
-               isinstance(summary_raw_hf_response.result["response_data"], list) and \
-               summary_raw_hf_response.result["response_data"][0] and \
-               "generated_text" in summary_raw_hf_response.result["response_data"][0]:
-                summary_final_text = summary_raw_hf_response.result["response_data"][0]["generated_text"].strip()
+            # Access the structured_content attribute of the CallToolResult object
+            if summary_raw_hf_response and summary_raw_hf_response.structured_content and \
+               summary_raw_hf_response.structured_content.get("response_data") and \
+               isinstance(summary_raw_hf_response.structured_content["response_data"], list) and \
+               summary_raw_hf_response.structured_content["response_data"][0] and \
+               "generated_text" in summary_raw_hf_response.structured_content["response_data"][0]:
+                summary_final_text = summary_raw_hf_response.structured_content["response_data"][0]["generated_text"].strip()
                 logger.info(f"Received summary text from MCP server for PR #{pr_id}.")
                 logger.debug(f"Summary text (first 100 chars): {summary_final_text[:100]}...")
             else:
