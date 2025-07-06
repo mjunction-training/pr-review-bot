@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import re
@@ -236,20 +237,35 @@ class MCPClient:
 
             logger.info(f"Received MCP response for review generation: {review_raw_hf_response}")
 
-            # Access the structured_content attribute of the CallToolResult object
-            if review_raw_hf_response and review_raw_hf_response.structured_content and \
-               review_raw_hf_response.structured_content.get("response_data") and \
-               isinstance(review_raw_hf_response.structured_content["response_data"], list) and \
-               review_raw_hf_response.structured_content["response_data"][0] and \
-               "generated_text" in review_raw_hf_response.structured_content["response_data"][0]:
-                review_raw_text = review_raw_hf_response.structured_content["response_data"][0]["generated_text"]
-                logger.info(
-                    f"Received raw review text from MCP server for PR #{pr_id}. Length: {len(review_raw_text)} chars.")
-                logger.debug(f"Raw review text (first 200 chars): {review_raw_text[:200]}...")
-            else:
+            review_raw_text = None
+            # Check if content exists and is a list, then try to parse the text within it
+            if review_raw_hf_response and review_raw_hf_response.content and \
+               isinstance(review_raw_hf_response.content, list) and \
+               len(review_raw_hf_response.content) > 0 and \
+               hasattr(review_raw_hf_response.content[0], 'text'):
+                try:
+                    # The 'text' attribute contains a JSON string, which needs to be parsed
+                    parsed_content = json.loads(review_raw_hf_response.content[0].text)
+                    if parsed_content.get("response_data") and \
+                       isinstance(parsed_content["response_data"], dict) and \
+                       "generated_text" in parsed_content["response_data"]:
+                        review_raw_text = parsed_content["response_data"]["generated_text"]
+                        logger.info(
+                            f"Received raw review text from MCP server for PR #{pr_id}. Length: {len(review_raw_text)} chars.")
+                        logger.debug(f"Raw review text (first 200 chars): {review_raw_text[:200]}...")
+                    else:
+                        logger.error(
+                            f"Parsed content missing 'response_data' or 'generated_text' for PR #{pr_id}: {parsed_content}")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to decode JSON from review response content for PR #{pr_id}: {e}. Raw text: {review_raw_hf_response.content[0].text}", exc_info=True)
+                except Exception as e:
+                    logger.error(f"Unexpected error processing review response content for PR #{pr_id}: {e}", exc_info=True)
+
+            if not review_raw_text:
                 logger.error(
                     f"Failed to get valid raw review text from LLM response via MCP for PR #{pr_id}. Response: {review_raw_hf_response}")
                 return None
+
 
             logger.info(f"Building summary prompt for PR #{pr_id}.")
             summary_prompt_string = self.build_summary_prompt(review_raw_text=review_raw_text)
@@ -270,18 +286,28 @@ class MCPClient:
                 )
 
             summary_final_text = "No summary generated."
-            # Access the structured_content attribute of the CallToolResult object
-            if summary_raw_hf_response and summary_raw_hf_response.structured_content and \
-               summary_raw_hf_response.structured_content.get("response_data") and \
-               isinstance(summary_raw_hf_response.structured_content["response_data"], list) and \
-               summary_raw_hf_response.structured_content["response_data"][0] and \
-               "generated_text" in summary_raw_hf_response.structured_content["response_data"][0]:
-                summary_final_text = summary_raw_hf_response.structured_content["response_data"][0]["generated_text"].strip()
-                logger.info(f"Received summary text from MCP server for PR #{pr_id}.")
-                logger.debug(f"Summary text (first 100 chars): {summary_final_text[:100]}...")
-            else:
-                logger.warning(
-                    f"Failed to get valid summary text from LLM response via MCP for PR #{pr_id}. Response: {summary_raw_hf_response}")
+            # Check if content exists and is a list, then try to parse the text within it
+            if summary_raw_hf_response and summary_raw_hf_response.content and \
+               isinstance(summary_raw_hf_response.content, list) and \
+               len(summary_raw_hf_response.content) > 0 and \
+               hasattr(summary_raw_hf_response.content[0], 'text'):
+                try:
+                    # The 'text' attribute contains a JSON string, which needs to be parsed
+                    parsed_content = json.loads(summary_raw_hf_response.content[0].text)
+                    if parsed_content.get("response_data") and \
+                       isinstance(parsed_content["response_data"], dict) and \
+                       "generated_text" in parsed_content["response_data"]:
+                        summary_final_text = parsed_content["response_data"]["generated_text"].strip()
+                        logger.info(f"Received summary text from MCP server for PR #{pr_id}.")
+                        logger.debug(f"Summary text (first 100 chars): {summary_final_text[:100]}...")
+                    else:
+                        logger.warning(
+                            f"Parsed content missing 'response_data' or 'generated_text' for summary PR #{pr_id}: {parsed_content}")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to decode JSON from summary response content for PR #{pr_id}: {e}. Raw text: {summary_raw_hf_response.content[0].text}", exc_info=True)
+                except Exception as e:
+                    logger.warning(f"Unexpected error processing summary response content for PR #{pr_id}: {e}", exc_info=True)
+
 
             logger.info(f"Parsing review output for PR #{pr_id}.")
             comments, security_issues = self.parse_review_output(review_raw_text)
