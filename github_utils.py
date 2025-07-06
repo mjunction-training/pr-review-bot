@@ -162,7 +162,8 @@ class GitHubUtils:
                     logger.error(f"Could not post error comment about commenting failure: {comment_e}")
 
 
-    def check_github_api_health(self) -> str:
+    @staticmethod
+    def check_github_api_health() -> str:
         try:
             response = requests.get("https://api.github.com/",
                                     timeout=int(os.getenv("GITHUB_API_HEALTH_CHECK_TIMEOUT", 3)))

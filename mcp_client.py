@@ -59,6 +59,7 @@ class MCPClient:
         self.transport = StreamableHttpTransport(url=self.mcp_url)
         self.mcp_client = Client(transport=self.transport)
 
+
     @staticmethod
     def load_guidelines() -> str:
         try:
@@ -67,6 +68,7 @@ class MCPClient:
         except Exception as e:
             logger.error(f"Failed to load guidelines in mcp_client: {str(e)}", exc_info=True)
             return ""
+
 
     @staticmethod
     def build_review_prompt(repo: str, pr_id: int, guidelines: str, diff: str) -> str:
@@ -106,6 +108,7 @@ class MCPClient:
         )
         return StrOutputParser().parse(review_prompt_template.format_messages()[0].content)
 
+
     @staticmethod
     def build_summary_prompt(review_raw_text: str) -> str:
         summary_prompt_content = f"""
@@ -127,6 +130,7 @@ class MCPClient:
             ]
         )
         return StrOutputParser().parse(summary_prompt_template.format_messages()[0].content)
+
 
     @staticmethod
     def parse_review_output(text: str) -> tuple[List[Dict], List[Dict]]:
@@ -163,6 +167,7 @@ class MCPClient:
             else:
                 logger.warning(f"Line did not match expected comment or security issue format: {line}")
         return comments, security_issues
+
 
     async def send_review_request(self, pr_details: dict) -> ParsedReviewOutput | None:
         pr_id = pr_details.get('pr_id', 0)
@@ -262,6 +267,7 @@ class MCPClient:
         except Exception as e:
             logger.error(f"Failed to get review payload for PR #{pr_id} from MCP server: {str(e)}", exc_info=True)
         return None
+
 
     def check_mcp_server_health(self) -> str:
         if not self.mcp_url:
