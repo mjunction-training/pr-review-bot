@@ -1,59 +1,64 @@
-import os
-import requests
 import logging
-from github_utils import GitHubUtils
+import os
+import re
+from typing import List, Dict, Any
+
+import requests
 from fastmcp.client import Client
 from fastmcp.client.transports import StreamableHttpTransport
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
-from typing import List, Dict, Any
+
+from github_utils import GitHubUtils
 
 logger = logging.getLogger(__name__)
 
-class ReviewInputClient(BaseModel):
-    """Schema for the input payload to the PR review model on the client side."""
-    diff: str
-    repo: str
-    pr_id: int
-    metadata: Dict[str, Any]
-    review_prompt_content: str
-    summary_prompt_content: str
 
-class CommentClient(BaseModel):
-    """Schema for a single line comment on the client side."""
+class HFPassthroughInputClient(BaseModel):
+    model_name: str
+    inputs: str
+
+
+class HFPassthroughOutputClient(BaseModel):
+    response_data: Dict[str, Any]
+
+
+class Comment(BaseModel):
     file: str
     line: int
     comment: str
 
-class SecurityIssueClient(BaseModel):
-    """Schema for a single security issue on the client side."""
+
+class SecurityIssue(BaseModel):
     file: str
     line: int
     issue: str
 
-class ReviewOutputClient(BaseModel):
-    """Schema for the output payload from the PR review model on the client side."""
+
+class ParsedReviewOutput(BaseModel):
     summary: str
-    comments: List[CommentClient]
-    security_issues: List[SecurityIssueClient]
-# --- End BaseModel classes ---
+    comments: List[Comment]
+    security_issues: List[SecurityIssue]
 
 
 class MCPClient:
     def __init__(self, github_utils: GitHubUtils):
         self.github_utils = github_utils
         self.mcp_url = os.getenv('MCP_SERVER_URL')
+        self.mcp_client_timeout = int(os.getenv("MCP_CLIENT_TIMEOUT", 600))
         if not self.mcp_url:
             logger.error("MCP_SERVER_URL environment variable not set.")
             raise ValueError("MCP_SERVER_URL must be provided or set as an environment variable.")
 
-        # Ensure mcp_url explicitly ends with '/mcp/'
-        self.mcp_url = self.mcp_url.rstrip('/') # Remove any existing trailing slash
+        self.mcp_url = self.mcp_url.rstrip('/')
         if not self.mcp_url.endswith('/mcp'):
-            self.mcp_url = f"{self.mcp_url}/mcp" # Ensure it has /mcp
-        self.mcp_url = f"{self.mcp_url}/" # Explicitly add the trailing slash
-        
+            self.mcp_url = f"{self.mcp_url}/mcp"
+        self.mcp_url = f"{self.mcp_url}/"
+
         self.transport = StreamableHttpTransport(url=self.mcp_url)
         self.mcp_client = Client(transport=self.transport)
+
 
     @staticmethod
     def load_guidelines() -> str:
@@ -61,12 +66,12 @@ class MCPClient:
             with open("guidelines.md", "r") as f:
                 return f.read()
         except Exception as e:
-            logger.error(f"Failed to load guidelines in mcp_client: {str(e)}")
+            logger.error(f"Failed to load guidelines in mcp_client: {str(e)}", exc_info=True)
             return ""
 
+
     @staticmethod
-    def build_prompts(repo: str, pr_id: int, guidelines: str, diff: str) -> tuple[str, str]:
-        # Use double curly braces to escape literal curly braces in f-strings
+    def build_review_prompt(repo: str, pr_id: int, guidelines: str, diff: str) -> str:
         review_prompt_content = f"""
             You are a expert code reviewer who reviews GitHub Pull Requests.
             Your task is to provide a comprehensive code review based on the provided guidelines and code changes.
@@ -74,16 +79,16 @@ class MCPClient:
             Provide actionable suggestions and code examples where appropriate.
 
             <review_guidelines>
-            {guidelines}
+            {{guidelines}}
             </review_guidelines>
 
             <pr_details>
-            Repository: {repo}
-            Pull Request ID: {pr_id}
+            Repository: {{repo}}
+            Pull Request ID: {{pr_id}}
             </pr_details>
 
             <diff>
-            {diff}
+            {{diff}}
             </diff>
 
             Please provide your review in the following format:
@@ -91,77 +96,196 @@ class MCPClient:
             For security issues: SECURITY:<file>:<line number>:<issue description>
             """
 
+        review_prompt_template = ChatPromptTemplate.from_messages(
+            [
+                ("system", review_prompt_content.format(
+                    guidelines=guidelines,
+                    repo=repo,
+                    pr_id=pr_id,
+                    diff=diff
+                ))
+            ]
+        )
+        return StrOutputParser().parse(review_prompt_template.format_messages()[0].content)
+
+
+    @staticmethod
+    def build_summary_prompt(review_raw_text: str) -> str:
         summary_prompt_content = f"""
             Summarize the review comments for the following pull request.
-            The comments and security issues to be summarized will be provided after this instruction.
+            The comments and security issues to be summarized are provided below.
             """
-        logger.info(f"Building review prompts: {review_prompt_content}, {summary_prompt_content}")
-        return review_prompt_content, summary_prompt_content
-        
 
-    async def send_review_request(self, pr_details: dict) -> dict | None:
+        final_summary_prompt_text = f"""
+            {summary_prompt_content}
+
+            <review_raw_text>
+            {review_raw_text}
+            </review_raw_text>
+            """
+
+        summary_prompt_template = ChatPromptTemplate.from_messages(
+            [
+                ("human", final_summary_prompt_text)
+            ]
+        )
+        return StrOutputParser().parse(summary_prompt_template.format_messages()[0].content)
+
+
+    @staticmethod
+    def parse_review_output(text: str) -> tuple[List[Dict], List[Dict]]:
+        comments = []
+        security_issues = []
+
+        lines = text.strip().split('\n')
+
+        for line in lines:
+            line = line.strip()
+            security_match = re.match(r"SECURITY:([^:]+):(\d+):(.+)", line)
+            comment_match = re.match(r"([^:]+):(\d+):(.+)", line)
+
+            if security_match:
+                try:
+                    file, line_num, issue = security_match.groups()
+                    security_issues.append({
+                        "file": file.strip(),
+                        "line": int(line_num.strip()),
+                        "issue": issue.strip()
+                    })
+                except ValueError:
+                    logger.warning(f"Could not parse security issue line: {line}")
+            elif comment_match:
+                try:
+                    file, line_num, comment = comment_match.groups()
+                    comments.append({
+                        "file": file.strip(),
+                        "line": int(line_num.strip()),
+                        "comment": comment.strip()
+                    })
+                except ValueError:
+                    logger.warning(f"Could not parse comment line: {line}")
+            else:
+                logger.warning(f"Line did not match expected comment or security issue format: {line}")
+        return comments, security_issues
+
+
+    async def send_review_request(self, pr_details: dict) -> ParsedReviewOutput | None:
+        pr_id = pr_details.get('pr_id', 0)
+        repo = pr_details.get('repo', 'N/A')
         try:
             installation_id = pr_details['installation_id']
             access_token = self.github_utils.get_installation_token(installation_id)
 
             if not access_token:
-                logger.error("No access token available for fetching diff.")
+                logger.error(f"No access token available for fetching diff for PR #{pr_id}.")
                 return None
-            
-            diff_content = self.github_utils.get_pr_diff(pr_details['diff_url'], access_token)
-            guidelines = self.load_guidelines()
 
-            review_prompt_content, summary_prompt_content = self.build_prompts(
-                repo=pr_details['repo'],
-                pr_id=pr_details['pr_id'],
+            diff_content = self.github_utils.get_pr_diff(pr_details['diff_url'], access_token)
+
+            if not diff_content:
+                logger.warning(f"Diff content for PR #{pr_id} is empty. Skipping review.")
+                return None
+
+            guidelines = self.load_guidelines()
+            if not guidelines:
+                logger.warning(f"Guidelines content for PR #{pr_id} is empty. Review might be less effective.")
+
+            logger.info(f"Building review prompt for PR #{pr_id}.")
+            review_prompt_string = self.build_review_prompt(
+                repo=repo,
+                pr_id=pr_id,
                 guidelines=guidelines,
                 diff=diff_content
             )
-            
-            input_data = ReviewInputClient(
-                diff=diff_content,
-                repo=pr_details['repo'],
-                pr_id=pr_details['pr_id'],
-                metadata={
-                    "commit_sha": pr_details['commit_sha'],
-                    "installation_id": installation_id
-                },
-                review_prompt_content=review_prompt_content,
-                summary_prompt_content=summary_prompt_content
-            )
-            
-            logger.info(f"Attempting to send PR #{pr_details['pr_id']} to MCP server using fastmcp.client.")
-            
-            review_payload = None 
+            logger.debug(f"Review prompt built. Length: {len(review_prompt_string)} chars.")
 
-            async with self.mcp_client as client: 
-                review_payload = await client.call_tool(
-                    name="pr_review_model",
-                    arguments={"input_data": input_data.model_dump()},
-                    timeout=600
+            review_input_for_mcp = HFPassthroughInputClient(
+                model_name=os.getenv("HUGGING_FACE_REVIEW_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct"),
+                inputs=review_prompt_string
+            )
+
+            logger.info(f"Calling MCP server for review generation for PR #{pr_id}.")
+            review_raw_hf_response = None
+            async with self.mcp_client as client:
+                review_raw_hf_response = await client.call_tool(
+                    name="llm_invoke_model",
+                    arguments={"input_data": review_input_for_mcp.model_dump()},
+                    timeout=self.mcp_client_timeout
                 )
 
-            logger.info(f"Received review payload for PR #{pr_details['pr_id']} from MCP successfully.")
-            return review_payload
+            if review_raw_hf_response and review_raw_hf_response.get("response_data") and isinstance(
+                    review_raw_hf_response["response_data"], list) and review_raw_hf_response["response_data"][
+                0] and "generated_text" in review_raw_hf_response["response_data"][0]:
+                review_raw_text = review_raw_hf_response["response_data"][0]["generated_text"]
+                logger.info(
+                    f"Received raw review text from MCP server for PR #{pr_id}. Length: {len(review_raw_text)} chars.")
+                logger.debug(f"Raw review text (first 200 chars): {review_raw_text[:200]}...")
+            else:
+                logger.error(
+                    f"Failed to get valid raw review text from LLM response via MCP for PR #{pr_id}. Response: {review_raw_hf_response}")
+                return None
+
+            logger.info(f"Building summary prompt for PR #{pr_id}.")
+            summary_prompt_string = self.build_summary_prompt(review_raw_text=review_raw_text)
+            logger.debug(f"Summary prompt built. Length: {len(summary_prompt_string)} chars.")
+
+            summary_input_for_mcp = HFPassthroughInputClient(
+                model_name=os.getenv("HUGGING_FACE_SUMMARY_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct"),
+                inputs=summary_prompt_string
+            )
+
+            logger.info(f"Calling MCP server for summary generation for PR #{pr_id}.")
+            summary_raw_hf_response = None
+            async with self.mcp_client as client:
+                summary_raw_hf_response = await client.call_tool(
+                    name="llm_invoke_model",
+                    arguments={"input_data": summary_input_for_mcp.model_dump()},
+                    timeout=self.mcp_client_timeout
+                )
+
+            summary_final_text = "No summary generated."
+            if summary_raw_hf_response and summary_raw_hf_response.get("response_data") and isinstance(
+                    summary_raw_hf_response["response_data"], list) and summary_raw_hf_response["response_data"][
+                0] and "generated_text" in summary_raw_hf_response["response_data"][0]:
+                summary_final_text = summary_raw_hf_response["response_data"][0]["generated_text"].strip()
+                logger.info(f"Received summary text from MCP server for PR #{pr_id}.")
+                logger.debug(f"Summary text (first 100 chars): {summary_final_text[:100]}...")
+            else:
+                logger.warning(
+                    f"Failed to get valid summary text from LLM response via MCP for PR #{pr_id}. Response: {summary_raw_hf_response}")
+
+            logger.info(f"Parsing review output for PR #{pr_id}.")
+            comments, security_issues = self.parse_review_output(review_raw_text)
+            logger.info(f"Parsed {len(comments)} comments and {len(security_issues)} security issues for PR #{pr_id}.")
+
+            return ParsedReviewOutput(
+                summary=summary_final_text,
+                comments=[Comment(**c) for c in comments],
+                security_issues=[SecurityIssue(**s) for s in security_issues]
+            )
 
         except Exception as e:
-            logger.error(f"Failed to get review payload for PR #{pr_details['pr_id']} from MCP server: {str(e)}", exc_info=True)
+            logger.error(f"Failed to get review payload for PR #{pr_id} from MCP server: {str(e)}", exc_info=True)
         return None
+
 
     def check_mcp_server_health(self) -> str:
         if not self.mcp_url:
             return "not_configured"
         try:
-            # Corrected health check URL path
             health_url = self.mcp_url.replace("/mcp/", "/health")
-            mcp_response = requests.get(health_url, timeout=3) 
+            logger.debug(f"Checking MCP server health at: {health_url}")
+            mcp_response = requests.get(health_url, timeout=int(os.getenv("MCP_HEALTH_CHECK_TIMEOUT", 3)))
             if mcp_response.status_code == 200:
+                logger.info("MCP server health check successful.")
                 return "reachable"
             else:
+                logger.warning(
+                    f"MCP server health check failed with status: {mcp_response.status_code}. Response: {mcp_response.text}")
                 return f"unreachable (status: {mcp_response.status_code})"
         except requests.exceptions.RequestException as e:
-            logger.error(f"MCP server health check failed: {e}")
+            logger.error(f"MCP server health check failed due to request error: {e}", exc_info=True)
             return f"unreachable (error: {e})"
         except Exception as e:
-            logger.error(f"Unexpected error during MCP server health check: {e}")
+            logger.error(f"Unexpected error during MCP server health check: {e}", exc_info=True)
             return f"unreachable (unexpected error: {e})"
