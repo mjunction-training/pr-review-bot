@@ -2,8 +2,10 @@ requests>=2.32.4
 fastmcp>=2.10.2
 pydantic>=2.11.7
 Flask>=3.1.1
+Flask[async]
 PyGithub>=2.6.1
 cryptography>=45.0.5
 langchain-core>=0.3.68
 langchain-community>=0.3.27
 python-dotenv>=1.1.1
+gunicorn>=23.0.0
