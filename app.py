@@ -39,8 +39,7 @@ async def handle_webhook():
     try:
 
         event = request.headers.get('X-GitHub-Event')
-        github.verify_webhook_signature(request_data=request.data, signature=request.headers.get('X-Hub-Signature-256'))
-        payload = github.parse_github_webhook(request_data=request.data)
+        payload = github.parse_github_webhook(request_data=request.data, signature=request.headers.get('X-Hub-Signature-256'))
         app.logger.info(f"Webhook event '{event}' parsed successfully.")
         app.logger.debug(f"Webhook payload: {payload}")
 
