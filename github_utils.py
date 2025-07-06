@@ -57,8 +57,7 @@ class GitHubUtils:
         logger.debug("Webhook signature verified successfully.")
 
 
-    def parse_github_webhook(self, request_data: bytes, signature: str) -> dict:
-        self.verify_webhook_signature(request_data, signature)
+    def parse_github_webhook(self, request_data: bytes) -> dict:
         payload = json.loads(request_data)
         logger.debug("Webhook payload parsed as JSON.")
         return payload
