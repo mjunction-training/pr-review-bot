@@ -37,11 +37,10 @@ except ValueError as e:
 async def handle_webhook():
     app.logger.debug(f"Received webhook request. Headers: {request.headers}")
     try:
+
         event = request.headers.get('X-GitHub-Event')
-        payload = github.parse_github_webhook(
-            request_data=request.data,
-            signature=request.headers.get('X-Hub-Signature-256')
-        )
+        github.verify_webhook_signature(request_data=request.data, signature=request.headers.get('X-Hub-Signature-256'))
+        payload = github.parse_github_webhook(request_data=request.data)
         app.logger.info(f"Webhook event '{event}' parsed successfully.")
         app.logger.debug(f"Webhook payload: {payload}")
 
@@ -55,7 +54,7 @@ async def handle_webhook():
         app.logger.error(f"Unexpected error during webhook parsing: {exception}", exc_info=True)
         return jsonify({"error": "Internal Server Error", "message": "An unexpected error occurred"}), 500
 
-    if event == "pull_request" and payload.get("action") in ["opened", "reopened", "synchronize"]:
+    if event == "pull_request" and payload.get("action") in ["opened", "reopened", "synchronize", "review_requested"]:
         app.logger.info(
             f"Processing pull_request event for PR #{payload['pull_request']['number']} (action: {payload['action']}).")
 
