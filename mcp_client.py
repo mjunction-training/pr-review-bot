@@ -72,23 +72,23 @@ class MCPClient:
 
     @staticmethod
     def build_review_prompt(repo: str, pr_id: int, guidelines: str, diff: str) -> str:
-        review_prompt_content = f"""
+        review_prompt_content = """
             You are a expert code reviewer who reviews GitHub Pull Requests.
             Your task is to provide a comprehensive code review based on the provided guidelines and code changes.
             Focus on identifying potential bugs, security vulnerabilities, performance issues, and maintainability concerns.
             Provide actionable suggestions and code examples where appropriate.
 
             <review_guidelines>
-            {{guidelines}}
+            {guidelines}
             </review_guidelines>
 
             <pr_details>
-            Repository: {{repo}}
-            Pull Request ID: {{pr_id}}
+            Repository: {repo}
+            Pull Request ID: {pr_id}
             </pr_details>
 
             <diff>
-            {{diff}}
+            {diff}
             </diff>
 
             Please provide your review in the following format:
