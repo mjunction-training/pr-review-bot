@@ -96,16 +96,19 @@ class MCPClient:
             For security issues: SECURITY:<file>:<line number>:<issue description>
             """
 
-        review_prompt_template = ChatPromptTemplate.from_messages(
-            [
-                ("system", review_prompt_content.format(
-                    guidelines=guidelines,
-                    repo=repo,
-                    pr_id=pr_id,
-                    diff=diff
-                ))
-            ]
+        template = ChatPromptTemplate([
+            ("system", review_prompt_content)
+        ])
+
+        review_prompt_template = template.invoke(
+            {
+                "guidelines": guidelines,
+                "repo": repo,
+                "pr_id": pr_id,
+                "diff": diff
+            }
         )
+
         return StrOutputParser().parse(review_prompt_template.format_messages()[0].content)
 
 
@@ -116,7 +119,7 @@ class MCPClient:
             The comments and security issues to be summarized are provided below.
             """
 
-        final_summary_prompt_text = f"""
+        final_summary_prompt_text = """
             {summary_prompt_content}
 
             <review_raw_text>
@@ -124,11 +127,17 @@ class MCPClient:
             </review_raw_text>
             """
 
-        summary_prompt_template = ChatPromptTemplate.from_messages(
-            [
-                ("human", final_summary_prompt_text)
-            ]
+        template = ChatPromptTemplate([
+            ("human", final_summary_prompt_text)
+        ])
+
+        summary_prompt_template = template.invoke(
+            {
+                "summary_prompt_content": summary_prompt_content,
+                "review_raw_text": review_raw_text
+            }
         )
+
         return StrOutputParser().parse(summary_prompt_template.format_messages()[0].content)
 
 
