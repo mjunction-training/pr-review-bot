@@ -222,6 +222,8 @@ class MCPClient:
                     timeout=self.mcp_client_timeout
                 )
 
+            logger.info(f"Received MCP response for review generation:: {review_raw_hf_response}")
+
             if review_raw_hf_response and review_raw_hf_response.get("response_data") and isinstance(
                     review_raw_hf_response["response_data"], list) and review_raw_hf_response["response_data"][
                 0] and "generated_text" in review_raw_hf_response["response_data"][0]:
