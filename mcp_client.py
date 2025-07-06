@@ -230,7 +230,7 @@ class MCPClient:
             logger.debug(f"Summary prompt built. Length: {len(summary_prompt_string)} chars.")
 
             summary_input_for_mcp = HFPassthroughInputClient(
-                model_name=os.getenv("HUGGING_FACE_SUMMARY_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct"),
+                model_name=os.getenv("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct"),
                 inputs=summary_prompt_string
             )
 
