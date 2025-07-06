@@ -74,7 +74,7 @@ class MCPClient:
             Provide actionable suggestions and code examples where appropriate.
 
             <review_guidelines>
-            {guidelines}
+            
             </review_guidelines>
 
             <pr_details>
