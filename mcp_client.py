@@ -109,7 +109,7 @@ class MCPClient:
             }
         )
 
-        return StrOutputParser().parse(review_prompt_template.format_messages()[0].content)
+        return StrOutputParser().parse(review_prompt_template.to_messages()[0].content)
 
 
     @staticmethod
@@ -138,7 +138,7 @@ class MCPClient:
             }
         )
 
-        return StrOutputParser().parse(summary_prompt_template.format_messages()[0].content)
+        return StrOutputParser().parse(summary_prompt_template.to_messages()[0].content)
 
 
     @staticmethod
