@@ -83,7 +83,7 @@ class MCPClient:
             </pr_details>
 
             <diff>
-            {diff}
+            
             </diff>
 
             Please provide your review in the following format:
