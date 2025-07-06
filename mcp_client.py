@@ -238,14 +238,9 @@ class MCPClient:
             logger.info(f"Received MCP response for review generation: {review_raw_hf_response}")
 
             review_raw_text = None
-            # Check if content exists and is a list, then try to parse the text within it
-            if review_raw_hf_response and review_raw_hf_response.content and \
-               isinstance(review_raw_hf_response.content, list) and \
-               len(review_raw_hf_response.content) > 0 and \
-               hasattr(review_raw_hf_response.content[0], 'text'):
+            if review_raw_hf_response and review_raw_hf_response.data:
                 try:
-                    # The 'text' attribute contains a JSON string, which needs to be parsed
-                    parsed_content = json.loads(review_raw_hf_response.content[0].text)
+                    parsed_content = review_raw_hf_response.data
                     if parsed_content.get("response_data") and \
                        isinstance(parsed_content["response_data"], dict) and \
                        "generated_text" in parsed_content["response_data"]:
