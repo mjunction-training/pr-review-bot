@@ -179,8 +179,20 @@ class MCPClient:
 
 
     async def send_review_request(self, pr_details: dict) -> ParsedReviewOutput | None:
+        """
+        Sends a review request to the MCP server, processes the LLM responses, and returns
+        structured review output.
+
+        Args:
+            pr_details (dict): A dictionary containing PR details including 'pr_id', 'diff_url',
+                               'repo_name', 'repo_owner', and 'installation_id'.
+
+        Returns:
+            ParsedReviewOutput | None: An object containing the summary, comments, and security issues,
+                                       or None if the review process fails.
+        """
         pr_id = pr_details.get('pr_id', 0)
-        repo = pr_details.get('repo', 'N/A')
+        repo = f"{pr_details.get('repo_owner', 'N/A')}/{pr_details.get('repo_name', 'N/A')}"
         try:
             installation_id = pr_details['installation_id']
             access_token = self.github_utils.get_installation_token(installation_id)
@@ -222,12 +234,15 @@ class MCPClient:
                     timeout=self.mcp_client_timeout
                 )
 
-            logger.info(f"Received MCP response for review generation:: {review_raw_hf_response}")
+            logger.info(f"Received MCP response for review generation: {review_raw_hf_response}")
 
-            if review_raw_hf_response and review_raw_hf_response.get("response_data") and isinstance(
-                    review_raw_hf_response["response_data"], list) and review_raw_hf_response["response_data"][
-                0] and "generated_text" in review_raw_hf_response["response_data"][0]:
-                review_raw_text = review_raw_hf_response["response_data"][0]["generated_text"]
+            # Access the result attribute of the CallToolResult object
+            if review_raw_hf_response and review_raw_hf_response.result and \
+               review_raw_hf_response.result.get("response_data") and \
+               isinstance(review_raw_hf_response.result["response_data"], list) and \
+               review_raw_hf_response.result["response_data"][0] and \
+               "generated_text" in review_raw_hf_response.result["response_data"][0]:
+                review_raw_text = review_raw_hf_response.result["response_data"][0]["generated_text"]
                 logger.info(
                     f"Received raw review text from MCP server for PR #{pr_id}. Length: {len(review_raw_text)} chars.")
                 logger.debug(f"Raw review text (first 200 chars): {review_raw_text[:200]}...")
@@ -255,10 +270,13 @@ class MCPClient:
                 )
 
             summary_final_text = "No summary generated."
-            if summary_raw_hf_response and summary_raw_hf_response.get("response_data") and isinstance(
-                    summary_raw_hf_response["response_data"], list) and summary_raw_hf_response["response_data"][
-                0] and "generated_text" in summary_raw_hf_response["response_data"][0]:
-                summary_final_text = summary_raw_hf_response["response_data"][0]["generated_text"].strip()
+            # Access the result attribute of the CallToolResult object
+            if summary_raw_hf_response and summary_raw_hf_response.result and \
+               summary_raw_hf_response.result.get("response_data") and \
+               isinstance(summary_raw_hf_response.result["response_data"], list) and \
+               summary_raw_hf_response.result["response_data"][0] and \
+               "generated_text" in summary_raw_hf_response.result["response_data"][0]:
+                summary_final_text = summary_raw_hf_response.result["response_data"][0]["generated_text"].strip()
                 logger.info(f"Received summary text from MCP server for PR #{pr_id}.")
                 logger.debug(f"Summary text (first 100 chars): {summary_final_text[:100]}...")
             else:
