@@ -145,7 +145,7 @@ class GitHubUtils:
             repo = github_client.get_repo(repo_full_name)
             pull_request = repo.get_pull(pr_number)
 
-            body = f"## PR Review Summary ✨\n\n{summary}\n\n"
+            body = f"## PR Review by CodeGuardian 🤖\n\n### PR Review Summary ✨\n\n{summary}\n\n"
             if security_issues:
                 body += "### Security Issues 🔒\n"
                 for issue in security_issues:
